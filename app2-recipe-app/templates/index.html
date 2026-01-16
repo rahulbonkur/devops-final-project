@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quick Bites Hub - Bachelor's Recipe Guide</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+    <div class="header">
+        <h1>🍜 Quick Bites Hub</h1>
+        <p>Budget-Friendly Recipes for Hostel Life | Made by Students, for Students</p>
+    </div>
+
+    <div class="search-section">
+        <div class="search-box">
+            <input type="text" class="search-input" placeholder="Search recipes..." id="searchInput">
+            <select id="categoryFilter">
+                <option value="">All Categories</option>
+                <option value="Quick Bites">Quick Bites</option>
+                <option value="Breakfast">Breakfast</option>
+                <option value="Main Course">Main Course</option>
+                <option value="Snacks">Snacks</option>
+            </select>
+            <select id="budgetFilter">
+                <option value="">Any Budget</option>
+                <option value="30">Under ₹30</option>
+                <option value="50">Under ₹50</option>
+                <option value="100">Under ₹100</option>
+            </select>
+            <button class="search-button" onclick="searchRecipes()">🔍 Search</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="stats-bar">
+            <div class="stat-card">
+                <h3>{{ recipes|length }}</h3>
+                <p>Total Recipes</p>
+            </div>
+            <div class="stat-card">
+                <h3>₹{{ ((recipes|sum(attribute='budget'))/recipes|length)|round|int if recipes else 0 }}</h3>
+                <p>Avg. Cost per Meal</p>
+            </div>
+            <div class="stat-card">
+                <h3>{{ ((recipes|sum(attribute='prep_time') +
+                    recipes|sum(attribute='cook_time'))/recipes|length)|round|int if recipes else 0 }}</h3>
+                <p>Avg. Time (mins)</p>
+            </div>
+        </div>
+
+        <h2 class="section-title">🏆 Top Rated Recipes</h2>
+
+        <div class="recipes-grid">
+            {% for recipe in recipes %}
+            <div class="recipe-card" onclick="window.location.href='/recipe/{{ recipe.id }}'">
+                <div class="recipe-image">
+                    {% if recipe.category == 'Quick Bites' %}🍜
+                    {% elif recipe.category == 'Breakfast' %}🍳
+                    {% elif recipe.category == 'Main Course' %}🍛
+                    {% else %}🥪{% endif %}
+                </div>
+                <div class="recipe-content">
+                    <div class="recipe-title">{{ recipe.title }}</div>
+                    <div class="recipe-description">{{ recipe.description }}</div>
+
+                    <div class="recipe-meta">
+                        <div class="meta-item">⏱️ {{ recipe.prep_time + recipe.cook_time }} mins</div>
+                        <div class="meta-item">👤 {{ recipe.servings }} serving(s)</div>
+                    </div>
+
+                    <div style="margin-bottom: 10px;">
+                        <span
+                            class="badge {% if recipe.difficulty == 'Easy' %}badge-easy{% elif recipe.difficulty == 'Medium' %}badge-medium{% else %}badge-hard{% endif %}">
+                            {{ recipe.difficulty }}
+                        </span>
+                        <span class="badge budget-badge">₹{{ recipe.budget }}</span>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div class="rating">
+                            ⭐ {{ "%.1f"|format(recipe.rating) }}
+                            <span style="color: #999; font-size: 12px;">({{ recipe.rating_count }})</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <button class="add-recipe-btn" onclick="window.location.href='/add'" title="Add Recipe">+</button>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+
+</html>

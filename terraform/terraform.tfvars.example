@@ -1,0 +1,18 @@
+# Terraform Variables Configuration
+# Copy this file to terraform.tfvars and fill in your values
+
+# REQUIRED: Your EC2 Key Pair Name (created in AWS Console or via CLI)
+mykey = "devops-key"
+
+# Optional variables (have defaults, but recommended to set):
+aws_region           = "us-east-1"
+environment          = "production"
+project_name         = "devops-final"
+vpc_cidr             = "10.0.0.0/16"
+jenkins_instance_type = "t2.medium"
+slave_instance_type  = "t2.micro"
+
+# Example:
+# mykey = "your-key-pair-name"
+# aws_region = "us-east-1"
+# environment = "dev"

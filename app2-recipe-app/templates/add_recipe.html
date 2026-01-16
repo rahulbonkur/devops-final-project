@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Recipe - Quick Bites Hub</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+    <div class="header">
+        <h1>🍜 Quick Bites Hub</h1>
+        <a href="/" style="color: white; text-decoration: none; margin-top: 10px; display: inline-block;">← Back to
+            Recipes</a>
+    </div>
+
+    <div class="container" style="max-width: 800px; margin: 30px auto; padding: 20px;">
+        <div style="background: white; border-radius: 15px; padding: 30px; box-shadow: 0 5px 15px rgba(0,0,0,0.1);">
+            <h1 style="color: #333; margin-bottom: 30px;">➕ Add New Recipe</h1>
+
+            <form method="POST" action="/add">
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 5px; color: #333; font-weight: bold;">Recipe Title
+                        *</label>
+                    <input type="text" name="title" required
+                        style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 16px;">
+                </div>
+
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 5px; color: #333; font-weight: bold;">Description
+                        *</label>
+                    <textarea name="description" required rows="3"
+                        style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 16px;"></textarea>
+                </div>
+
+                <div
+                    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                    <div>
+                        <label style="display: block; margin-bottom: 5px; color: #333; font-weight: bold;">Prep Time
+                            (min) *</label>
+                        <input type="number" name="prep_time" required min="1"
+                            style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 16px;">
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 5px; color: #333; font-weight: bold;">Cook Time
+                            (min) *</label>
+                        <input type="number" name="cook_time" required min="1"
+                            style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 16px;">
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 5px; color: #333; font-weight: bold;">Servings
+                            *</label>
+                        <input type="number" name="servings" required min="1"
+                            style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 16px;">
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+                    <div>
+                        <label style="display: block; margin-bottom: 5px; color: #333; font-weight: bold;">Difficulty
+                            *</label>
+                        <select name="difficulty" required
+                            style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 16px;">
+                            <option value="Easy">Easy</option>
+                            <option value="Medium">Medium</option>
+                            <option value="Hard">Hard</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 5px; color: #333; font-weight: bold;">Category
+                            *</label>
+                        <select name="category" required
+                            style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 16px;">
+                            <option value="Quick Bites">Quick Bites</option>
+                            <option value="Breakfast">Breakfast</option>
+                            <option value="Main Course">Main Course</option>
+                            <option value="Snacks">Snacks</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 5px; color: #333; font-weight: bold;">Budget (₹)
+                        *</label>
+                    <input type="number" name="budget" required min="1"
+                        style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 16px;">
+                </div>
+
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 5px; color: #333; font-weight: bold;">Ingredients *
+                        (one per line)</label>
+                    <textarea name="ingredients" required rows="6"
+                        style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 16px;"></textarea>
+                </div>
+
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 5px; color: #333; font-weight: bold;">Instructions *
+                        (step by step)</label>
+                    <textarea name="instructions" required rows="8"
+                        style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 16px;"></textarea>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+                    <div>
+                        <label style="display: block; margin-bottom: 5px; color: #333; font-weight: bold;">Calories
+                            (optional)</label>
+                        <input type="number" name="calories" min="0"
+                            style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 16px;">
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 5px; color: #333; font-weight: bold;">Equipment
+                            (optional)</label>
+                        <input type="text" name="equipment"
+                            style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 16px;">
+                    </div>
+                </div>
+
+                <div style="text-align: center; margin-top: 30px;">
+                    <button type="submit" class="view-recipe-btn" style="width: 200px; cursor: pointer;">Add
+                        Recipe</button>
+                    <a href="/"
+                        style="display: inline-block; margin-left: 15px; padding: 12px 30px; color: #666; text-decoration: none;">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</body>
+
+</html>

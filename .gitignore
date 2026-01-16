@@ -1,0 +1,69 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+*.egg-info/
+dist/
+build/
+
+# Flask
+instance/
+.webassets-cache
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+terraform.tfvars
+*.tfplan
+
+# Ansible
+*.retry
+.vault_pass
+
+# Docker
+*.log
+
+# AWS
+.aws/
+
+# SSH keys
+*.pem
+*.key
+id_rsa*
+known_hosts
+
+# Jenkins
+.jenkins/
+
+# Build artifacts
+*.zip
+*.tar.gz
+imagedefinitions.json
+secrets.txt

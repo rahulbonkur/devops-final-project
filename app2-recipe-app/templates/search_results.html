@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Search Results - Quick Bites Hub</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+    <div class="header">
+        <h1>🍜 Quick Bites Hub</h1>
+        <a href="/" style="color: white; text-decoration: none; margin-top: 10px; display: inline-block;">← Back to
+            Recipes</a>
+    </div>
+
+    <div class="container">
+        <h2 class="section-title">🔍 Search Results{% if query %}: "{{ query }}"{% endif %}</h2>
+
+        {% if recipes %}
+        <div class="recipes-grid">
+            {% for recipe in recipes %}
+            <div class="recipe-card" onclick="window.location.href='/recipe/{{ recipe.id }}'">
+                <div class="recipe-image">
+                    {% if recipe.category == 'Quick Bites' %}🍜
+                    {% elif recipe.category == 'Breakfast' %}🍳
+                    {% elif recipe.category == 'Main Course' %}🍛
+                    {% else %}🥪{% endif %}
+                </div>
+                <div class="recipe-content">
+                    <div class="recipe-title">{{ recipe.title }}</div>
+                    <div class="recipe-description">{{ recipe.description }}</div>
+
+                    <div class="recipe-meta">
+                        <div class="meta-item">⏱️ {{ recipe.prep_time + recipe.cook_time }} mins</div>
+                        <div class="meta-item">👤 {{ recipe.servings }} serving(s)</div>
+                    </div>
+
+                    <div style="margin-bottom: 10px;">
+                        <span
+                            class="badge {% if recipe.difficulty == 'Easy' %}badge-easy{% elif recipe.difficulty == 'Medium' %}badge-medium{% else %}badge-hard{% endif %}">
+                            {{ recipe.difficulty }}
+                        </span>
+                        <span class="badge budget-badge">₹{{ recipe.budget }}</span>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div class="rating">
+                            ⭐ {{ "%.1f"|format(recipe.rating) }}
+                            <span style="color: #999; font-size: 12px;">({{ recipe.rating_count }})</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div
+            style="text-align: center; padding: 60px 20px; background: white; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.1);">
+            <h2 style="color: #666; margin-bottom: 20px;">😔 No recipes found</h2>
+            <p style="color: #999; margin-bottom: 30px;">Try adjusting your search criteria</p>
+            <a href="/" class="view-recipe-btn" style="display: inline-block; text-decoration: none;">View All
+                Recipes</a>
+        </div>
+        {% endif %}
+    </div>
+</body>
+
+</html>

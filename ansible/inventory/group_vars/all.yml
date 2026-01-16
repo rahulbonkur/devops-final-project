@@ -1,0 +1,7 @@
+---
+app_name: recipe-app
+app_dir: /opt/recipe-app
+app_user: appuser
+python_version: "3.11"
+python_bin: python3
+app_port: 5000

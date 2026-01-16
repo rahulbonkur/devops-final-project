@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ recipe.title }} - Quick Bites Hub</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+    <div class="header">
+        <h1>🍜 Quick Bites Hub</h1>
+        <a href="/" style="color: white; text-decoration: none; margin-top: 10px; display: inline-block;">← Back to
+            Recipes</a>
+    </div>
+
+    <div class="container" style="max-width: 800px; margin: 30px auto; padding: 20px;">
+        <div style="background: white; border-radius: 15px; padding: 30px; box-shadow: 0 5px 15px rgba(0,0,0,0.1);">
+            <h1 style="color: #333; margin-bottom: 10px;">{{ recipe.title }}</h1>
+            <p style="color: #666; font-size: 18px; margin-bottom: 20px;">{{ recipe.description }}</p>
+
+            <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 30px;">
+                <span
+                    class="badge {% if recipe.difficulty == 'Easy' %}badge-easy{% elif recipe.difficulty == 'Medium' %}badge-medium{% else %}badge-hard{% endif %}">
+                    {{ recipe.difficulty }}
+                </span>
+                <span class="badge budget-badge">₹{{ recipe.budget }}</span>
+                <div class="rating">
+                    ⭐ {{ "%.1f"|format(recipe.rating) }} ({{ recipe.rating_count }} reviews)
+                </div>
+            </div>
+
+            <div
+                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 30px;">
+                <div style="text-align: center; padding: 15px; background: #f5f5f5; border-radius: 10px;">
+                    <div style="font-size: 24px; font-weight: bold; color: #ff6b6b;">⏱️ {{ recipe.prep_time }} min</div>
+                    <div style="color: #666;">Prep Time</div>
+                </div>
+                <div style="text-align: center; padding: 15px; background: #f5f5f5; border-radius: 10px;">
+                    <div style="font-size: 24px; font-weight: bold; color: #ff6b6b;">🔥 {{ recipe.cook_time }} min</div>
+                    <div style="color: #666;">Cook Time</div>
+                </div>
+                <div style="text-align: center; padding: 15px; background: #f5f5f5; border-radius: 10px;">
+                    <div style="font-size: 24px; font-weight: bold; color: #ff6b6b;">👤 {{ recipe.servings }}</div>
+                    <div style="color: #666;">Servings</div>
+                </div>
+                {% if recipe.calories %}
+                <div style="text-align: center; padding: 15px; background: #f5f5f5; border-radius: 10px;">
+                    <div style="font-size: 24px; font-weight: bold; color: #ff6b6b;">🔥 {{ recipe.calories }}</div>
+                    <div style="color: #666;">Calories</div>
+                </div>
+                {% endif %}
+            </div>
+
+            <div style="margin-bottom: 30px;">
+                <h2 style="color: #333; border-left: 5px solid #ff6b6b; padding-left: 15px; margin-bottom: 15px;">📝
+                    Ingredients</h2>
+                <div
+                    style="background: #f9f9f9; padding: 20px; border-radius: 10px; white-space: pre-line; line-height: 1.8;">
+                    {{ recipe.ingredients }}</div>
+            </div>
+
+            {% if recipe.equipment %}
+            <div style="margin-bottom: 30px;">
+                <h2 style="color: #333; border-left: 5px solid #ff6b6b; padding-left: 15px; margin-bottom: 15px;">🔧
+                    Equipment Needed</h2>
+                <div style="background: #f9f9f9; padding: 20px; border-radius: 10px;">{{ recipe.equipment }}</div>
+            </div>
+            {% endif %}
+
+            <div style="margin-bottom: 30px;">
+                <h2 style="color: #333; border-left: 5px solid #ff6b6b; padding-left: 15px; margin-bottom: 15px;">👨‍🍳
+                    Instructions</h2>
+                <div
+                    style="background: #f9f9f9; padding: 20px; border-radius: 10px; white-space: pre-line; line-height: 1.8;">
+                    {{ recipe.instructions }}</div>
+            </div>
+
+            <div style="text-align: center; margin-top: 30px;">
+                <a href="/" class="view-recipe-btn" style="display: inline-block; text-decoration: none;">← Back to All
+                    Recipes</a>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

@@ -1,0 +1,13 @@
+[Unit]
+Description=Food Recipe App
+After=network.target
+
+[Service]
+User=appuser
+WorkingDirectory={{ app_dir }}
+EnvironmentFile={{ app_dir }}/.env
+ExecStart={{ app_dir }}/venv/bin/gunicorn --bind 127.0.0.1:{{ app_port }} app.main:app
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
