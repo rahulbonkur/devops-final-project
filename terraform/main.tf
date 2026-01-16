@@ -9,10 +9,10 @@ terraform {
   }
 
   backend "s3" {
-    bucket = "devops-final-project"
-    key    = "devops-project/terraform.tfstate"
-    region = "ap-south-1"
-  }
+  bucket = "devops-final-projects"
+  key    = "devops-project/terraform.tfstate"
+  region = "ap-south-1"
+}
 }
 
 provider "aws" {
