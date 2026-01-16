@@ -10,7 +10,7 @@ pipeline {
         choice(
             name: 'DEPLOYMENT_TARGET',
             choices: ['all', 'infrastructure', 'recipe-app'],
-            description: 'Select what to deploy'
+            description: 'What do you want to deploy?'
         )
         booleanParam(
             name: 'DESTROY_INFRASTRUCTURE',
@@ -21,25 +21,13 @@ pipeline {
 
     stages {
 
+        /* =======================
+           CHECKOUT
+        ======================= */
         stage('Checkout') {
             steps {
                 checkout scm
-                echo "Repository checked out successfully"
-            }
-        }
-
-        /* =======================
-           DESTROY (ISOLATED)
-        ======================= */
-        stage('Terraform Destroy') {
-            when {
-                expression { params.DESTROY_INFRASTRUCTURE }
-            }
-            steps {
-                dir('terraform') {
-                    input message: '⚠️ CONFIRM: Destroy ALL infrastructure?', ok: 'Destroy'
-                    sh 'terraform destroy -auto-approve'
-                }
+                echo "✅ Repository checked out"
             }
         }
 
@@ -64,6 +52,9 @@ pipeline {
             }
         }
 
+        /* =======================
+           TERRAFORM PLAN
+        ======================= */
         stage('Terraform Plan') {
             when {
                 expression {
@@ -79,23 +70,32 @@ pipeline {
             }
         }
 
-        stage('Terraform Apply') {
+        /* =======================
+           TERRAFORM APPLY / DESTROY
+        ======================= */
+        stage('Terraform Apply or Destroy') {
             when {
                 expression {
-                    !params.DESTROY_INFRASTRUCTURE &&
-                    (params.DEPLOYMENT_TARGET == 'all' ||
-                     params.DEPLOYMENT_TARGET == 'infrastructure')
+                    params.DEPLOYMENT_TARGET == 'all' ||
+                    params.DEPLOYMENT_TARGET == 'infrastructure'
                 }
             }
             steps {
                 dir('terraform') {
-                    sh 'terraform apply -auto-approve tfplan'
+                    script {
+                        if (params.DESTROY_INFRASTRUCTURE) {
+                            echo "⚠️ Destroying infrastructure"
+                            sh 'terraform destroy -auto-approve'
+                        } else {
+                            sh 'terraform apply -auto-approve tfplan'
+                        }
+                    }
                 }
             }
         }
 
         /* =======================
-           OUTPUTS
+           GET OUTPUTS
         ======================= */
         stage('Get Infrastructure Outputs') {
             when {
@@ -108,12 +108,15 @@ pipeline {
                             script: 'terraform output -raw recipe_slave_public_ip',
                             returnStdout: true
                         ).trim()
-                        echo "Recipe Slave IP: ${env.RECIPE_SLAVE_IP}"
+                        echo "✅ Recipe Slave IP: ${env.RECIPE_SLAVE_IP}"
                     }
                 }
             }
         }
 
+        /* =======================
+           WAIT FOR EC2
+        ======================= */
         stage('Wait for Slave VM') {
             when {
                 expression {
@@ -126,13 +129,17 @@ pipeline {
                 retry(10) {
                     sleep 10
                     sh """
-                        ssh -o StrictHostKeyChecking=no -i ~/.ssh/mykey.pem \
-                        ec2-user@${env.RECIPE_SLAVE_IP} 'echo VM ready'
+                        ssh -o StrictHostKeyChecking=no \
+                        -i ~/.ssh/mykey.pem \
+                        ec2-user@${env.RECIPE_SLAVE_IP} 'echo VM Ready'
                     """
                 }
             }
         }
 
+        /* =======================
+           ANSIBLE DEPLOY
+        ======================= */
         stage('Deploy Recipe App with Ansible') {
             when {
                 expression {
@@ -158,6 +165,9 @@ EOF
             }
         }
 
+        /* =======================
+           VERIFY
+        ======================= */
         stage('Verify Deployment') {
             when {
                 expression {
@@ -178,14 +188,18 @@ EOF
     post {
         success {
             echo """
-            ✅ DEPLOYMENT SUCCESSFUL
-            Target: ${params.DEPLOYMENT_TARGET}
-            Recipe App: http://${env.RECIPE_SLAVE_IP}
-            """
+✅ DEPLOYMENT SUCCESSFUL
+Target: ${params.DEPLOYMENT_TARGET}
+Recipe App URL: http://${env.RECIPE_SLAVE_IP}
+"""
         }
 
         failure {
-            echo "❌ Deployment failed. Check logs."
+            echo "❌ Deployment failed. Check Jenkins console logs."
+        }
+
+        always {
+            cleanWs()
         }
     }
 }
