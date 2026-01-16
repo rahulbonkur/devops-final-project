@@ -4,6 +4,7 @@ pipeline {
     environment {
         AWS_REGION = 'ap-south-1'
         ANSIBLE_HOST_KEY_CHECKING = 'False'
+        TF_IN_AUTOMATION = 'true'
     }
 
     parameters {
@@ -12,10 +13,11 @@ pipeline {
             choices: ['all', 'infrastructure', 'recipe-app'],
             description: 'What do you want to deploy?'
         )
+
         booleanParam(
             name: 'DESTROY_INFRASTRUCTURE',
             defaultValue: false,
-            description: '⚠️ Destroy ALL Terraform infrastructure'
+            description: '⚠️ DESTROY all Terraform infrastructure'
         )
     }
 
@@ -28,6 +30,23 @@ pipeline {
             steps {
                 checkout scm
                 echo "✅ Repository checked out"
+            }
+        }
+
+        /* =======================
+           TERRAFORM DESTROY
+        ======================= */
+        stage('Terraform Destroy') {
+            when {
+                expression { params.DESTROY_INFRASTRUCTURE }
+            }
+            steps {
+                dir('terraform') {
+                    sh '''
+                        terraform init -input=false
+                        terraform destroy -auto-approve
+                    '''
+                }
             }
         }
 
@@ -45,7 +64,7 @@ pipeline {
             steps {
                 dir('terraform') {
                     sh '''
-                        terraform init
+                        terraform init -input=false
                         terraform validate
                     '''
                 }
@@ -71,25 +90,19 @@ pipeline {
         }
 
         /* =======================
-           TERRAFORM APPLY / DESTROY
+           TERRAFORM APPLY
         ======================= */
-        stage('Terraform Apply or Destroy') {
+        stage('Terraform Apply') {
             when {
                 expression {
-                    params.DEPLOYMENT_TARGET == 'all' ||
-                    params.DEPLOYMENT_TARGET == 'infrastructure'
+                    !params.DESTROY_INFRASTRUCTURE &&
+                    (params.DEPLOYMENT_TARGET == 'all' ||
+                     params.DEPLOYMENT_TARGET == 'infrastructure')
                 }
             }
             steps {
                 dir('terraform') {
-                    script {
-                        if (params.DESTROY_INFRASTRUCTURE) {
-                            echo "⚠️ Destroying infrastructure"
-                            sh 'terraform destroy -auto-approve'
-                        } else {
-                            sh 'terraform apply -auto-approve tfplan'
-                        }
-                    }
+                    sh 'terraform apply -auto-approve tfplan'
                 }
             }
         }
@@ -108,6 +121,7 @@ pipeline {
                             script: 'terraform output -raw recipe_slave_public_ip',
                             returnStdout: true
                         ).trim()
+
                         echo "✅ Recipe Slave IP: ${env.RECIPE_SLAVE_IP}"
                     }
                 }
@@ -115,7 +129,7 @@ pipeline {
         }
 
         /* =======================
-           WAIT FOR EC2
+           WAIT FOR VM
         ======================= */
         stage('Wait for Slave VM') {
             when {
@@ -131,7 +145,7 @@ pipeline {
                     sh """
                         ssh -o StrictHostKeyChecking=no \
                         -i ~/.ssh/mykey.pem \
-                        ec2-user@${env.RECIPE_SLAVE_IP} 'echo VM Ready'
+                        ec2-user@${env.RECIPE_SLAVE_IP} 'echo VM ready'
                     """
                 }
             }
@@ -158,7 +172,8 @@ EOF
                     """
 
                     sh '''
-                        ansible-playbook -i inventory/hosts \
+                        ansible-playbook \
+                        -i inventory/hosts \
                         playbooks/deploy-recipe-app.yml -v
                     '''
                 }
@@ -189,13 +204,14 @@ EOF
         success {
             echo """
 ✅ DEPLOYMENT SUCCESSFUL
+
 Target: ${params.DEPLOYMENT_TARGET}
 Recipe App URL: http://${env.RECIPE_SLAVE_IP}
 """
         }
 
         failure {
-            echo "❌ Deployment failed. Check Jenkins console logs."
+            echo "❌ Deployment failed. Check Jenkins logs."
         }
 
         always {
