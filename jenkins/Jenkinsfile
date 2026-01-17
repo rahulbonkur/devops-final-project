@@ -72,14 +72,30 @@ pipeline {
                 echo "❌ CodeBuild failed with status: ${status}"
                 echo "View logs at: ${logLink}"
                 
-                // Try to get build logs
+                // Try to get detailed build information
                 sh """
-                  echo "Fetching CodeBuild logs..."
+                  echo "=== Fetching CodeBuild build details ==="
                   aws codebuild batch-get-builds \
                     --ids ${buildId} \
                     --region ${AWS_REGION} \
-                    --query 'builds[0].[buildStatus,currentPhase,sourceLocation]' \
+                    --query 'builds[0].[buildStatus,currentPhase,sourceLocation,buildNumber,phases[?phaseStatus==`FAILED`].phaseType]' \
                     --output text || true
+                  
+                  echo ""
+                  echo "=== Failed Phase Information ==="
+                  aws codebuild batch-get-builds \
+                    --ids ${buildId} \
+                    --region ${AWS_REGION} \
+                    --query 'builds[0].phases[?phaseStatus==`FAILED`].[phaseType,phaseStatus,contexts[?messageType==`ERROR`].message]' \
+                    --output text || true
+                  
+                  echo ""
+                  echo "=== Build Environment ==="
+                  aws codebuild batch-get-builds \
+                    --ids ${buildId} \
+                    --region ${AWS_REGION} \
+                    --query 'builds[0].environment.environmentVariables' \
+                    --output table || true
                 """
                 
                 error "CodeBuild failed: ${status}. Check logs at: ${logLink}"
