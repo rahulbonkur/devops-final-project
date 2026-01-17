@@ -3,22 +3,35 @@ version: 0.2
 env:
   variables:
     AWS_DEFAULT_REGION: ap-south-1
+    IMAGE_REPO_NAME: ai-chatbot
+    IMAGE_TAG: latest
 
 phases:
   pre_build:
     commands:
-      - aws sts get-caller-identity
-      - ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-      - aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.ap-south-1.amazonaws.com
-      - REPO_URI=$ACCOUNT_ID.dkr.ecr.ap-south-1.amazonaws.com/ai-chatbot
+      - echo "Logging in to Amazon ECR..."
+      - aws ecr get-login-password --region $AWS_DEFAULT_REGION \
+        | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+      - REPOSITORY_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME
+      - echo "ECR Repo URI: $REPOSITORY_URI"
 
   build:
     commands:
-      - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
-      - docker build -t $REPO_URI:latest -t $REPO_URI:$COMMIT_HASH .
+      - echo "Building Docker image..."
+      - docker build -t $IMAGE_REPO_NAME:$IMAGE_TAG app1-ai-chatbot
+      - docker tag $IMAGE_REPO_NAME:$IMAGE_TAG $REPOSITORY_URI:$IMAGE_TAG
 
   post_build:
     commands:
-      - docker push $REPO_URI:latest
-      - docker push $REPO_URI:$COMMIT_HASH
-      - aws ecs update-service --cluster ai-chatbot-cluster --service ai-chatbot-service --force-new-deployment --region ap-south-1
+      - echo "Pushing Docker image to ECR..."
+      - docker push $REPOSITORY_URI:$IMAGE_TAG
+      - echo "Updating ECS service..."
+      - aws ecs update-service \
+          --cluster ai-chatbot-cluster \
+          --service ai-chatbot-service \
+          --force-new-deployment
+      - echo "Build & deployment completed successfully 🚀"
+
+artifacts:
+  files:
+    - '**/*'
