@@ -1,221 +1,45 @@
 pipeline {
-    agent any
+  agent any
 
-    environment {
-        AWS_REGION = 'ap-south-1'
-        ANSIBLE_HOST_KEY_CHECKING = 'False'
-        TF_IN_AUTOMATION = 'true'
+  environment {
+    AWS_REGION = 'ap-south-1'
+  }
+
+  stages {
+
+    stage('Checkout') {
+      steps { checkout scm }
     }
 
-    parameters {
-        choice(
-            name: 'DEPLOYMENT_TARGET',
-            choices: ['all', 'infrastructure', 'recipe-app'],
-            description: 'What do you want to deploy?'
-        )
-
-        booleanParam(
-            name: 'DESTROY_INFRASTRUCTURE',
-            defaultValue: false,
-            description: '⚠️ DESTROY all Terraform infrastructure'
-        )
+    stage('Terraform Apply') {
+      steps {
+        dir('terraform') {
+          sh '''
+            terraform init
+            terraform apply -auto-approve
+          '''
+        }
+      }
     }
 
-    stages {
-
-        /* =======================
-           CHECKOUT
-        ======================= */
-        stage('Checkout') {
-            steps {
-                checkout scm
-                echo "✅ Repository checked out"
-            }
-        }
-
-        /* =======================
-           TERRAFORM DESTROY
-        ======================= */
-        stage('Terraform Destroy') {
-            when {
-                expression { params.DESTROY_INFRASTRUCTURE }
-            }
-            steps {
-                dir('terraform') {
-                    sh '''
-                        terraform init -input=false
-                        terraform destroy -auto-approve
-                    '''
-                }
-            }
-        }
-
-        /* =======================
-           TERRAFORM INIT
-        ======================= */
-        stage('Terraform Init') {
-            when {
-                expression {
-                    !params.DESTROY_INFRASTRUCTURE &&
-                    (params.DEPLOYMENT_TARGET == 'all' ||
-                     params.DEPLOYMENT_TARGET == 'infrastructure')
-                }
-            }
-            steps {
-                dir('terraform') {
-                    sh '''
-                        terraform init -input=false
-                        terraform validate
-                    '''
-                }
-            }
-        }
-
-        /* =======================
-           TERRAFORM PLAN
-        ======================= */
-        stage('Terraform Plan') {
-            when {
-                expression {
-                    !params.DESTROY_INFRASTRUCTURE &&
-                    (params.DEPLOYMENT_TARGET == 'all' ||
-                     params.DEPLOYMENT_TARGET == 'infrastructure')
-                }
-            }
-            steps {
-                dir('terraform') {
-                    sh 'terraform plan -out=tfplan'
-                }
-            }
-        }
-
-        /* =======================
-           TERRAFORM APPLY
-        ======================= */
-        stage('Terraform Apply') {
-            when {
-                expression {
-                    !params.DESTROY_INFRASTRUCTURE &&
-                    (params.DEPLOYMENT_TARGET == 'all' ||
-                     params.DEPLOYMENT_TARGET == 'infrastructure')
-                }
-            }
-            steps {
-                dir('terraform') {
-                    sh 'terraform apply -auto-approve tfplan'
-                }
-            }
-        }
-
-        /* =======================
-           GET OUTPUTS
-        ======================= */
-        stage('Get Infrastructure Outputs') {
-            when {
-                expression { !params.DESTROY_INFRASTRUCTURE }
-            }
-            steps {
-                dir('terraform') {
-                    script {
-                        env.RECIPE_SLAVE_IP = sh(
-                            script: 'terraform output -raw recipe_slave_public_ip',
-                            returnStdout: true
-                        ).trim()
-
-                        echo "✅ Recipe Slave IP: ${env.RECIPE_SLAVE_IP}"
-                    }
-                }
-            }
-        }
-
-        /* =======================
-           WAIT FOR VM
-        ======================= */
-        stage('Wait for Slave VM') {
-            when {
-                expression {
-                    !params.DESTROY_INFRASTRUCTURE &&
-                    (params.DEPLOYMENT_TARGET == 'all' ||
-                     params.DEPLOYMENT_TARGET == 'recipe-app')
-                }
-            }
-            steps {
-                retry(10) {
-                    sleep 10
-                    sh """
-                        ssh -o StrictHostKeyChecking=no \
-                        -i ~/.ssh/mykey.pem \
-                        ec2-user@${env.RECIPE_SLAVE_IP} 'echo VM ready'
-                    """
-                }
-            }
-        }
-
-        /* =======================
-           ANSIBLE DEPLOY
-        ======================= */
-        stage('Deploy Recipe App with Ansible') {
-            when {
-                expression {
-                    !params.DESTROY_INFRASTRUCTURE &&
-                    (params.DEPLOYMENT_TARGET == 'all' ||
-                     params.DEPLOYMENT_TARGET == 'recipe-app')
-                }
-            }
-            steps {
-                dir('ansible') {
-                    sh """
-                        cat > inventory/hosts << EOF
-[recipe_slave]
-${env.RECIPE_SLAVE_IP} ansible_user=ec2-user ansible_ssh_private_key_file=~/.ssh/mykey.pem
-EOF
-                    """
-
-                    sh '''
-                        ansible-playbook \
-                        -i inventory/hosts \
-                        playbooks/deploy-recipe-app.yml -v
-                    '''
-                }
-            }
-        }
-
-        /* =======================
-           VERIFY
-        ======================= */
-        stage('Verify Deployment') {
-            when {
-                expression {
-                    !params.DESTROY_INFRASTRUCTURE &&
-                    (params.DEPLOYMENT_TARGET == 'all' ||
-                     params.DEPLOYMENT_TARGET == 'recipe-app')
-                }
-            }
-            steps {
-                retry(3) {
-                    sleep 5
-                    sh "curl -f http://${env.RECIPE_SLAVE_IP}/health"
-                }
-            }
-        }
+    stage('Build & Push AI Chatbot Image') {
+      steps {
+        sh '''
+          aws codebuild start-build \
+            --project-name ai-chatbot \
+            --region ap-south-1
+        '''
+      }
     }
 
-    post {
-        success {
-            echo """
-✅ DEPLOYMENT SUCCESSFUL
-
-Target: ${params.DEPLOYMENT_TARGET}
-Recipe App URL: http://${env.RECIPE_SLAVE_IP}
-"""
+    stage('Deploy Recipe App') {
+      steps {
+        dir('ansible') {
+          sh '''
+            ansible-playbook -i inventory/hosts playbooks/deploy-recipe-app.yml
+          '''
         }
-
-        failure {
-            echo "❌ Deployment failed. Check Jenkins logs."
-        }
-
-        always {
-            cleanWs()
-        }
+      }
     }
+  }
 }
