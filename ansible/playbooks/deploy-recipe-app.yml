@@ -1,14 +1,11 @@
 ---
-- name: Deploy Food Recipe App on Amazon Linux Slave
+- name: Deploy Recipe App on Amazon Linux
   hosts: recipe_slave
   become: true
 
-  vars_files:
-    - ../group_vars/all.yml
-
   tasks:
 
-    - name: Update system packages
+    - name: Update system
       dnf:
         name: "*"
         state: latest
@@ -20,16 +17,15 @@
           - python3-pip
           - git
           - nginx
-          - curl
         state: present
 
-    - name: Create application user
+    - name: Create app user
       user:
         name: "{{ app_user }}"
         system: yes
         shell: /sbin/nologin
 
-    - name: Create application directory
+    - name: Create app directory
       file:
         path: "{{ app_dir }}"
         state: directory
@@ -37,7 +33,7 @@
         group: "{{ app_user }}"
         mode: "0755"
 
-    - name: Sync application source code
+    - name: Copy application code
       synchronize:
         src: ../../app2-recipe-app/
         dest: "{{ app_dir }}/"
@@ -45,7 +41,6 @@
         rsync_opts:
           - "--exclude=.git"
           - "--exclude=venv"
-      notify: Restart app
 
     - name: Set ownership
       file:
@@ -54,21 +49,16 @@
         group: "{{ app_user }}"
         recurse: yes
 
-    - name: Create Python virtualenv
+    - name: Create virtualenv
       command: "{{ python_bin }} -m venv {{ app_dir }}/venv"
       args:
         creates: "{{ app_dir }}/venv"
 
-    - name: Upgrade pip
-      command: "{{ app_dir }}/venv/bin/pip install --upgrade pip"
-
-    - name: Install Python requirements
+    - name: Install Python dependencies
       command: "{{ app_dir }}/venv/bin/pip install -r {{ app_dir }}/app/requirements.txt"
 
     - name: Install gunicorn
-      pip:
-        name: gunicorn
-        virtualenv: "{{ app_dir }}/venv"
+      command: "{{ app_dir }}/venv/bin/pip install gunicorn"
 
     - name: Create env file
       template:
@@ -81,24 +71,16 @@
     - name: Create systemd service
       template:
         src: ../templates/app.service.j2
-        dest: /etc/systemd/system/{{ app_name }}.service
-        mode: "0644"
-      notify:
-        - Reload systemd
-        - Restart app
-
-    - name: Reload systemd immediately
-      systemd:
-        daemon_reload: yes
+        dest: "{{ systemd_service_path }}"
+      notify: Restart app
 
     - name: Configure nginx
       template:
         src: ../templates/nginx.conf.j2
-        dest: /etc/nginx/conf.d/{{ app_name }}.conf
-        mode: "0644"
+        dest: "{{ nginx_conf_path }}"
       notify: Restart nginx
 
-    - name: Enable and start services
+    - name: Enable services
       systemd:
         name: "{{ item }}"
         enabled: yes
@@ -107,23 +89,7 @@
         - nginx
         - "{{ app_name }}"
 
-    - name: Wait for app
-      wait_for:
-        port: "{{ app_port }}"
-        delay: 2
-        timeout: 30
-
-    - name: Health check
-      uri:
-        url: "http://localhost:{{ app_port }}/health"
-        status_code: 200
-
   handlers:
-
-    - name: Reload systemd
-      systemd:
-        daemon_reload: yes
-
     - name: Restart app
       systemd:
         name: "{{ app_name }}"
