@@ -19,8 +19,8 @@ resource "aws_iam_role_policy" "codebuild_policy" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect   = "Allow"
-      Action   = [
+      Effect = "Allow"
+      Action = [
         "logs:*",
         "ecr:*",
         "ecs:UpdateService",
@@ -39,12 +39,12 @@ resource "aws_codebuild_project" "ai_chatbot" {
 
   environment {
     compute_type    = "BUILD_GENERAL1_SMALL"
-    image           = "aws/codebuild/amazonlinux2-x86_64-standard:4.0"
+    image           = "aws/codebuild/amazonlinux2-x86_64-standard:5.0"
     type            = "LINUX_CONTAINER"
     privileged_mode = true
 
     environment_variable {
-      name  = "AWS_DEFAULT_REGION"
+      name  = "AWS_REGION"
       value = var.aws_region
     }
 
