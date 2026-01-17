@@ -3,43 +3,126 @@ pipeline {
 
   environment {
     AWS_REGION = 'ap-south-1'
+    CODEBUILD_PROJECT = 'ai-chatbot'
+    ECS_CLUSTER = 'ai-chatbot-cluster'
+    ECS_SERVICE = 'ai-chatbot-service'
   }
 
   stages {
 
+    /* =======================
+       CHECKOUT
+    ======================= */
     stage('Checkout') {
-      steps { checkout scm }
+      steps {
+        checkout scm
+        echo "✅ Code checked out"
+      }
     }
 
+    /* =======================
+       TERRAFORM APPLY
+    ======================= */
     stage('Terraform Apply') {
       steps {
         dir('terraform') {
           sh '''
-            terraform init
+            terraform init -input=false
             terraform apply -auto-approve
           '''
         }
       }
     }
 
+    /* =======================
+       BUILD & PUSH CHATBOT
+    ======================= */
     stage('Build & Push AI Chatbot Image') {
       steps {
+        script {
+          echo "🚀 Starting CodeBuild project"
+
+          def buildId = sh(
+            script: """
+              aws codebuild start-build \
+                --project-name ${CODEBUILD_PROJECT} \
+                --region ${AWS_REGION} \
+                --query 'build.id' \
+                --output text
+            """,
+            returnStdout: true
+          ).trim()
+
+          echo "🔄 CodeBuild ID: ${buildId}"
+
+          timeout(time: 15, unit: 'MINUTES') {
+            waitUntil {
+              def status = sh(
+                script: """
+                  aws codebuild batch-get-builds \
+                    --ids ${buildId} \
+                    --region ${AWS_REGION} \
+                    --query 'builds[0].buildStatus' \
+                    --output text
+                """,
+                returnStdout: true
+              ).trim()
+
+              echo "📦 CodeBuild status: ${status}"
+
+              if (status == 'SUCCEEDED') {
+                return true
+              }
+              if (status == 'FAILED' || status == 'FAULT' || status == 'STOPPED') {
+                error "❌ CodeBuild failed with status: ${status}"
+              }
+              sleep 15
+              return false
+            }
+          }
+        }
+      }
+    }
+
+    /* =======================
+       FORCE ECS REDEPLOY
+    ======================= */
+    stage('Deploy AI Chatbot to ECS') {
+      steps {
         sh '''
-          aws codebuild start-build \
-            --project-name ai-chatbot \
-            --region ap-south-1
+          echo "♻️ Forcing ECS redeployment"
+          aws ecs update-service \
+            --cluster ${ECS_CLUSTER} \
+            --service ${ECS_SERVICE} \
+            --force-new-deployment \
+            --region ${AWS_REGION}
         '''
       }
     }
 
-    stage('Deploy Recipe App') {
+    /* =======================
+       DEPLOY RECIPE APP
+    ======================= */
+    stage('Deploy Recipe App (Ansible)') {
       steps {
         dir('ansible') {
           sh '''
-            ansible-playbook -i inventory/hosts playbooks/deploy-recipe-app.yml
+            ansible-playbook \
+              -i inventory/hosts \
+              playbooks/deploy-recipe-app.yml
           '''
         }
       }
+    }
+  }
+
+  post {
+    success {
+      echo "✅ FULL PIPELINE SUCCESSFUL"
+    }
+
+    failure {
+      echo "❌ PIPELINE FAILED – CHECK LOGS"
     }
   }
 }
