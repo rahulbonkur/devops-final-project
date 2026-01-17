@@ -1,6 +1,14 @@
 pipeline {
   agent any
 
+  parameters {
+    choice(
+      name: 'WHAT_TO_DEPLOY',
+      choices: ['all', 'recipe', 'chatbot', 'destroy'],
+      description: 'Select what you want to deploy'
+    )
+  }
+
   environment {
     AWS_REGION = 'ap-south-1'
     CODEBUILD_PROJECT = 'ai-chatbot'
@@ -17,101 +25,60 @@ pipeline {
       }
     }
 
+    /* =========================
+       TERRAFORM
+    ========================= */
     stage('Terraform Apply') {
+      when {
+        expression { params.WHAT_TO_DEPLOY == 'all' || params.WHAT_TO_DEPLOY == 'recipe' || params.WHAT_TO_DEPLOY == 'chatbot' }
+      }
       steps {
         dir('terraform') {
           sh '''
-            terraform init -input=false
+            terraform init
             terraform apply -auto-approve
           '''
         }
       }
     }
 
-    stage('Build & Push AI Chatbot Image') {
+    stage('Terraform Destroy') {
+      when {
+        expression { params.WHAT_TO_DEPLOY == 'destroy' }
+      }
       steps {
-        catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
-          script {
-          def buildId = sh(
-            script: """
-              aws codebuild start-build \
-                --project-name ${CODEBUILD_PROJECT} \
-                --region ${AWS_REGION} \
-                --query 'build.id' \
-                --output text
-            """,
-            returnStdout: true
-          ).trim()
-
-          echo "CodeBuild Build ID: ${buildId}"
-
-          timeout(time: 15, unit: 'MINUTES') {
-            waitUntil {
-              def buildInfo = sh(
-                script: """
-                  aws codebuild batch-get-builds \
-                    --ids ${buildId} \
-                    --region ${AWS_REGION} \
-                    --query 'builds[0].[buildStatus,logs.deepLink]' \
-                    --output text
-                """,
-                returnStdout: true
-              ).trim()
-
-              def parts = buildInfo.split('\t')
-              def status = parts[0]
-              def logLink = parts.length > 1 ? parts[1] : "N/A"
-
-              echo "CodeBuild status: ${status}"
-              
-              if (status == 'SUCCEEDED') {
-                echo "✅ CodeBuild succeeded!"
-                return true
-              }
-              
-              if (status in ['FAILED','FAULT','STOPPED']) {
-                echo "❌ CodeBuild failed with status: ${status}"
-                echo "View logs at: ${logLink}"
-                
-                // Try to get detailed build information
-                sh """
-                  echo "=== Fetching CodeBuild build details ==="
-                  aws codebuild batch-get-builds \
-                    --ids ${buildId} \
-                    --region ${AWS_REGION} \
-                    --query 'builds[0].[buildStatus,currentPhase,sourceLocation,buildNumber,phases[?phaseStatus==`FAILED`].phaseType]' \
-                    --output text || true
-                  
-                  echo ""
-                  echo "=== Failed Phase Information ==="
-                  aws codebuild batch-get-builds \
-                    --ids ${buildId} \
-                    --region ${AWS_REGION} \
-                    --query 'builds[0].phases[?phaseStatus==`FAILED`].[phaseType,phaseStatus,contexts[?messageType==`ERROR`].message]' \
-                    --output text || true
-                  
-                  echo ""
-                  echo "=== Build Environment ==="
-                  aws codebuild batch-get-builds \
-                    --ids ${buildId} \
-                    --region ${AWS_REGION} \
-                    --query 'builds[0].environment.environmentVariables' \
-                    --output table || true
-                """
-                
-                error "CodeBuild failed: ${status}. Check logs at: ${logLink}"
-              }
-
-              sleep 15
-              return false
-            }
-          }
-          }
+        dir('terraform') {
+          sh '''
+            terraform init
+            terraform destroy -auto-approve
+          '''
         }
       }
     }
 
+    /* =========================
+       BUILD CHATBOT IMAGE
+    ========================= */
+    stage('Build AI Chatbot (CodeBuild)') {
+      when {
+        expression { params.WHAT_TO_DEPLOY == 'all' || params.WHAT_TO_DEPLOY == 'chatbot' }
+      }
+      steps {
+        sh '''
+          aws codebuild start-build \
+            --project-name ${CODEBUILD_PROJECT} \
+            --region ${AWS_REGION}
+        '''
+      }
+    }
+
+    /* =========================
+       DEPLOY CHATBOT TO ECS
+    ========================= */
     stage('Deploy AI Chatbot to ECS') {
+      when {
+        expression { params.WHAT_TO_DEPLOY == 'all' || params.WHAT_TO_DEPLOY == 'chatbot' }
+      }
       steps {
         sh '''
           aws ecs update-service \
@@ -123,7 +90,13 @@ pipeline {
       }
     }
 
+    /* =========================
+       DEPLOY RECIPE APP
+    ========================= */
     stage('Deploy Recipe App (Ansible)') {
+      when {
+        expression { params.WHAT_TO_DEPLOY == 'all' || params.WHAT_TO_DEPLOY == 'recipe' }
+      }
       steps {
         dir('ansible') {
           sh '''
@@ -133,19 +106,15 @@ pipeline {
           '''
         }
       }
-      post {
-        failure {
-          echo "❌ Ansible deployment failed - check logs above"
-        }
-        success {
-          echo "✅ Recipe app deployed successfully"
-        }
-      }
     }
   }
 
   post {
-    success { echo "✅ FULL PIPELINE SUCCESSFUL" }
-    failure { echo "❌ PIPELINE FAILED – CHECK LOGS" }
+    success {
+      echo "✅ Deployment completed for: ${params.WHAT_TO_DEPLOY}"
+    }
+    failure {
+      echo "❌ Deployment failed"
+    }
   }
 }
