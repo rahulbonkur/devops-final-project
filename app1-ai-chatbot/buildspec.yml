@@ -7,21 +7,36 @@ env:
 phases:
   pre_build:
     commands:
+      - echo "Current directory: $(pwd)"
+      - echo "Listing files:"
+      - ls -la
+      - echo "Changing to app1-ai-chatbot directory..."
+      - cd app1-ai-chatbot
+      - echo "Directory after change: $(pwd)"
+      - echo "Verifying Dockerfile exists:"
+      - ls -la Dockerfile || echo "ERROR: Dockerfile not found!"
       - echo "Logging in to Amazon ECR..."
       - aws ecr get-login-password --region $AWS_REGION |
         docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
       - REPO_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/ai-chatbot
+      - echo "ECR Repository URI: $REPO_URI"
 
   build:
     commands:
-      - echo "Building Docker image..."
+      - echo "Changing to app1-ai-chatbot directory..."
+      - cd app1-ai-chatbot
+      - REPO_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/ai-chatbot
+      - echo "Building Docker image from: $(pwd)"
+      - echo "ECR Repository URI: $REPO_URI"
+      - ls -la
       - docker build -t ai-chatbot:$IMAGE_TAG .
-
       - echo "Tagging image..."
       - docker tag ai-chatbot:$IMAGE_TAG $REPO_URI:$IMAGE_TAG
+      - echo "Image tagged successfully"
 
   post_build:
     commands:
-      - echo "Pushing image to ECR..."
+      - REPO_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/ai-chatbot
+      - echo "Pushing image to ECR: $REPO_URI:$IMAGE_TAG"
       - docker push $REPO_URI:$IMAGE_TAG
       - echo "Build completed successfully"

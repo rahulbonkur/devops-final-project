@@ -42,24 +42,47 @@ pipeline {
             returnStdout: true
           ).trim()
 
+          echo "CodeBuild Build ID: ${buildId}"
+
           timeout(time: 15, unit: 'MINUTES') {
             waitUntil {
-              def status = sh(
+              def buildInfo = sh(
                 script: """
                   aws codebuild batch-get-builds \
                     --ids ${buildId} \
                     --region ${AWS_REGION} \
-                    --query 'builds[0].buildStatus' \
+                    --query 'builds[0].[buildStatus,logs.deepLink]' \
                     --output text
                 """,
                 returnStdout: true
               ).trim()
 
-              echo "CodeBuild status: ${status}"
+              def parts = buildInfo.split('\t')
+              def status = parts[0]
+              def logLink = parts.length > 1 ? parts[1] : "N/A"
 
-              if (status == 'SUCCEEDED') return true
+              echo "CodeBuild status: ${status}"
+              
+              if (status == 'SUCCEEDED') {
+                echo "✅ CodeBuild succeeded!"
+                return true
+              }
+              
               if (status in ['FAILED','FAULT','STOPPED']) {
-                error "CodeBuild failed: ${status}"
+                echo "❌ CodeBuild failed with status: ${status}"
+                echo "View logs at: ${logLink}"
+                
+                // Try to get build logs
+                sh """
+                  echo "Fetching CodeBuild logs..."
+                  aws codebuild batch-get-builds \
+                    --ids ${buildId} \
+                    --region ${AWS_REGION} \
+                    --query 'builds[0].[buildStatus,currentPhase,sourceLocation]' \
+                    --output text || true
+                """
+                
+                error "CodeBuild failed: ${status}. Check logs at: ${logLink}"
               }
 
               sleep 15
