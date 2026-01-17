@@ -3,42 +3,62 @@ version: 0.2
 env:
   variables:
     IMAGE_TAG: latest
+    REPO_URI: ""
 
 phases:
   pre_build:
     commands:
+      - echo "=== PRE-BUILD PHASE ==="
       - echo "Current directory: $(pwd)"
       - echo "Listing root directory contents:"
-      - ls -la
+      - ls -la || true
       - echo "Checking app1-ai-chatbot directory:"
       - ls -la app1-ai-chatbot/ || echo "ERROR: app1-ai-chatbot directory not found!"
       - echo "Verifying Dockerfile exists:"
-      - test -f app1-ai-chatbot/Dockerfile && echo "Dockerfile found" || echo "ERROR: Dockerfile not found!"
-      - echo "Logging in to Amazon ECR..."
-      - aws ecr get-login-password --region $AWS_REGION |
-        docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+      - test -f app1-ai-chatbot/Dockerfile && echo "✅ Dockerfile found" || echo "❌ ERROR: Dockerfile not found!"
+      - echo "Setting REPO_URI environment variable..."
       - REPO_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/ai-chatbot
       - echo "ECR Repository URI: $REPO_URI"
+      - echo "Logging in to Amazon ECR..."
+      - |
+        aws ecr get-login-password --region $AWS_REGION | \
+        docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
 
   build:
     commands:
+      - echo "=== BUILD PHASE ==="
       - REPO_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/ai-chatbot
-      - echo "Building Docker image from app1-ai-chatbot directory..."
       - echo "ECR Repository URI: $REPO_URI"
-      - cd app1-ai-chatbot
+      - echo "Current working directory: $(pwd)"
+      - echo "Checking if Dockerfile exists in current directory:"
+      - test -f Dockerfile && DOCKERFILE_PATH=. || DOCKERFILE_PATH=app1-ai-chatbot
+      - echo "Dockerfile path: $DOCKERFILE_PATH"
+      - |
+        if [ -f Dockerfile ]; then
+          echo "✅ Dockerfile found in current directory"
+          BUILD_DIR=.
+        elif [ -f app1-ai-chatbot/Dockerfile ]; then
+          echo "✅ Dockerfile found in app1-ai-chatbot subdirectory"
+          BUILD_DIR=app1-ai-chatbot
+          cd app1-ai-chatbot || exit 1
+        else
+          echo "❌ ERROR: Dockerfile not found in current directory or app1-ai-chatbot/"
+          exit 1
+        fi
       - echo "Current directory: $(pwd)"
       - echo "Listing directory contents:"
-      - ls -la
-      - echo "Starting Docker build..."
-      - docker build -t ai-chatbot:$IMAGE_TAG .
-      - echo "Docker build completed successfully"
+      - ls -la || exit 1
+      - echo "Starting Docker build from $(pwd)..."
+      - docker build -t ai-chatbot:$IMAGE_TAG . || exit 1
+      - echo "✅ Docker build completed successfully"
       - echo "Tagging image..."
-      - docker tag ai-chatbot:$IMAGE_TAG $REPO_URI:$IMAGE_TAG
-      - echo "Image tagged successfully"
+      - docker tag ai-chatbot:$IMAGE_TAG $REPO_URI:$IMAGE_TAG || exit 1
+      - echo "✅ Image tagged successfully"
 
   post_build:
     commands:
+      - echo "=== POST-BUILD PHASE ==="
       - REPO_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/ai-chatbot
       - echo "Pushing image to ECR: $REPO_URI:$IMAGE_TAG"
-      - docker push $REPO_URI:$IMAGE_TAG
-      - echo "Build completed successfully"
+      - docker push $REPO_URI:$IMAGE_TAG || exit 1
+      - echo "✅ Build completed successfully"
