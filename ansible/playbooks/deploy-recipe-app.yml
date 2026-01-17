@@ -104,11 +104,48 @@
       notify: Restart nginx
       ignore_errors: yes
 
+    - name: Remove any other default server blocks
+      find:
+        paths: /etc/nginx/conf.d
+        patterns: "*.conf"
+        excludes: "recipe-app.conf"
+      register: nginx_configs
+
+    - name: Ensure recipe-app.conf is the only active config
+      file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ nginx_configs.files }}"
+      when: nginx_configs.files | length > 0
+      notify: Restart nginx
+      ignore_errors: yes
+
     - name: Test nginx configuration
       command: nginx -t
       register: nginx_test
       changed_when: false
       failed_when: nginx_test.rc != 0
+
+    - name: Verify nginx is running
+      systemd:
+        name: nginx
+        state: started
+
+    - name: Verify recipe app service is running
+      systemd:
+        name: recipe-app
+        state: started
+      ignore_errors: yes
+
+    - name: Check if app is listening on port 5000
+      shell: netstat -tlnp 2>/dev/null | grep :5000 || ss -tlnp 2>/dev/null | grep :5000 || echo "Port check unavailable"
+      register: app_port_check
+      changed_when: false
+      failed_when: false
+
+    - name: Display app status
+      debug:
+        msg: "App port check: {{ app_port_check.stdout_lines | default(['Not listening on 5000']) }}"
 
   handlers:
 
