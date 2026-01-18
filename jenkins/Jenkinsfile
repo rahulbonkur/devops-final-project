@@ -10,14 +10,17 @@ pipeline {
   }
 
   environment {
-    AWS_REGION = 'ap-south-1'
+    AWS_REGION      = 'ap-south-1'
     CODEBUILD_PROJECT = 'ai-chatbot'
-    ECS_CLUSTER = 'ai-chatbot-cluster'
-    ECS_SERVICE = 'ai-chatbot-service'
+    ECS_CLUSTER     = 'ai-chatbot-cluster'
+    ECS_SERVICE     = 'ai-chatbot-service'
   }
 
   stages {
 
+    /* =======================
+       CHECKOUT
+    ======================= */
     stage('Checkout') {
       steps {
         checkout scm
@@ -25,23 +28,9 @@ pipeline {
       }
     }
 
-    /* =========================
-       TERRAFORM
-    ========================= */
-    stage('Terraform Apply') {
-      when {
-        expression { params.WHAT_TO_DEPLOY == 'all' || params.WHAT_TO_DEPLOY == 'recipe' || params.WHAT_TO_DEPLOY == 'chatbot' }
-      }
-      steps {
-        dir('terraform') {
-          sh '''
-            terraform init
-            terraform apply -auto-approve
-          '''
-        }
-      }
-    }
-
+    /* =======================
+       TERRAFORM DESTROY
+    ======================= */
     stage('Terraform Destroy') {
       when {
         expression { params.WHAT_TO_DEPLOY == 'destroy' }
@@ -49,38 +38,96 @@ pipeline {
       steps {
         dir('terraform') {
           sh '''
-            terraform init
+            terraform init -input=false
             terraform destroy -auto-approve
           '''
         }
       }
     }
 
-    /* =========================
+    /* =======================
+       TERRAFORM APPLY
+    ======================= */
+    stage('Terraform Apply') {
+      when {
+        expression { params.WHAT_TO_DEPLOY != 'destroy' }
+      }
+      steps {
+        dir('terraform') {
+          sh '''
+            terraform init -input=false
+            terraform apply -auto-approve
+          '''
+        }
+      }
+    }
+
+    /* =======================
        BUILD CHATBOT IMAGE
-    ========================= */
+    ======================= */
     stage('Build AI Chatbot (CodeBuild)') {
       when {
         expression { params.WHAT_TO_DEPLOY == 'all' || params.WHAT_TO_DEPLOY == 'chatbot' }
       }
       steps {
-        sh '''
-          aws codebuild start-build \
-            --project-name ${CODEBUILD_PROJECT} \
-            --region ${AWS_REGION}
-        '''
+        script {
+          echo "🚀 Starting CodeBuild"
+
+          def buildId = sh(
+            script: """
+              aws codebuild start-build \
+                --project-name ${CODEBUILD_PROJECT} \
+                --region ${AWS_REGION} \
+                --query 'build.id' \
+                --output text
+            """,
+            returnStdout: true
+          ).trim()
+
+          echo "🆔 CodeBuild ID: ${buildId}"
+
+          timeout(time: 20, unit: 'MINUTES') {
+            waitUntil {
+              def status = sh(
+                script: """
+                  aws codebuild batch-get-builds \
+                    --ids ${buildId} \
+                    --region ${AWS_REGION} \
+                    --query 'builds[0].buildStatus' \
+                    --output text
+                """,
+                returnStdout: true
+              ).trim()
+
+              echo "📦 CodeBuild status: ${status}"
+
+              if (status == 'SUCCEEDED') {
+                echo "✅ CodeBuild completed successfully"
+                return true
+              }
+
+              if (status in ['FAILED', 'FAULT', 'STOPPED', 'TIMED_OUT']) {
+                error "❌ CodeBuild failed with status: ${status}"
+              }
+
+              sleep 15
+              return false
+            }
+          }
+        }
       }
     }
 
-    /* =========================
+    /* =======================
        DEPLOY CHATBOT TO ECS
-    ========================= */
+    ======================= */
     stage('Deploy AI Chatbot to ECS') {
       when {
         expression { params.WHAT_TO_DEPLOY == 'all' || params.WHAT_TO_DEPLOY == 'chatbot' }
       }
       steps {
         sh '''
+          echo "♻️ Forcing ECS redeployment"
           aws ecs update-service \
             --cluster ${ECS_CLUSTER} \
             --service ${ECS_SERVICE} \
@@ -90,9 +137,9 @@ pipeline {
       }
     }
 
-    /* =========================
+    /* =======================
        DEPLOY RECIPE APP
-    ========================= */
+    ======================= */
     stage('Deploy Recipe App (Ansible)') {
       when {
         expression { params.WHAT_TO_DEPLOY == 'all' || params.WHAT_TO_DEPLOY == 'recipe' }
@@ -111,10 +158,10 @@ pipeline {
 
   post {
     success {
-      echo "✅ Deployment completed for: ${params.WHAT_TO_DEPLOY}"
+      echo "✅ PIPELINE SUCCESS – ${params.WHAT_TO_DEPLOY}"
     }
     failure {
-      echo "❌ Deployment failed"
+      echo "❌ PIPELINE FAILED – CHECK LOGS"
     }
   }
 }
