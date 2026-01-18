@@ -1,6 +1,18 @@
 pipeline {
   agent any
 
+  /***********************
+   * PIPELINE SAFETY
+   ***********************/
+  options {
+    timeout(time: 45, unit: 'MINUTES')
+    disableConcurrentBuilds()
+    timestamps()
+  }
+
+  /***********************
+   * PARAMETERS
+   ***********************/
   parameters {
     choice(
       name: 'WHAT_TO_DEPLOY',
@@ -9,6 +21,9 @@ pipeline {
     )
   }
 
+  /***********************
+   * ENV VARIABLES
+   ***********************/
   environment {
     AWS_REGION        = 'ap-south-1'
     CODEBUILD_PROJECT = 'ai-chatbot'
@@ -18,122 +33,179 @@ pipeline {
 
   stages {
 
+    /***********************
+     * CHECKOUT
+     ***********************/
     stage('Checkout') {
       steps {
         checkout scm
-        echo "✅ Code checked out"
+        echo "✅ Code checked out successfully"
       }
     }
 
-stage('Terraform Destroy') {
-  when {
-    expression { params.WHAT_TO_DEPLOY == 'destroy' }
-  }
-  steps {
-    dir('terraform') {
-      withCredentials([
-        string(credentialsId: 'groq-api-key', variable: 'GROQ_API_KEY')
-      ]) {
-        sh '''
-          terraform init -input=false
-          terraform destroy -auto-approve \
-            -var="groq_api_key=$GROQ_API_KEY"
-        '''
-      }
-    }
-  }
-}
-
-stage('Terraform Apply') {
-  when {
-    expression { params.WHAT_TO_DEPLOY != 'destroy' }
-  }
-  steps {
-    dir('terraform') {
-      withCredentials([
-        string(credentialsId: 'groq-api-key', variable: 'GROQ_API_KEY')
-      ]) {
-        sh '''
-          terraform init -input=false
-          terraform apply -auto-approve \
-            -var="groq_api_key=$GROQ_API_KEY"
-        '''
-      }
-    }
-  }
-}
-
-    stage('Build AI Chatbot (CodeBuild)') {
+    /***********************
+     * CONFIRM DESTROY
+     ***********************/
+    stage('Confirm Destroy') {
       when {
-        expression { params.WHAT_TO_DEPLOY == 'all' || params.WHAT_TO_DEPLOY == 'chatbot' }
+        expression { params.WHAT_TO_DEPLOY == 'destroy' }
       }
       steps {
-        script {
-          echo "🚀 Starting CodeBuild..."
+        input message: '⚠️ CONFIRMATION REQUIRED: Destroy ALL infrastructure?'
+      }
+    }
 
-          def buildId = sh(
-            script: """
-              aws codebuild start-build \
-                --project-name ${CODEBUILD_PROJECT} \
-                --region ${AWS_REGION} \
-                --query 'build.id' \
-                --output text
-            """,
-            returnStdout: true
-          ).trim()
+    /***********************
+     * TERRAFORM DESTROY
+     ***********************/
+    stage('Terraform Destroy') {
+      when {
+        expression { params.WHAT_TO_DEPLOY == 'destroy' }
+      }
+      steps {
+        dir('terraform') {
+          withCredentials([
+            string(credentialsId: 'groq-api-key', variable: 'GROQ_API_KEY'),
+            [$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']
+          ]) {
+            sh '''
+              aws sts get-caller-identity
 
-          echo "🧱 CodeBuild ID: ${buildId}"
+              terraform init -input=false -upgrade=false
+              terraform destroy -auto-approve \
+                -var="groq_api_key=$GROQ_API_KEY"
+            '''
+          }
+        }
+      }
+    }
 
-          timeout(time: 20, unit: 'MINUTES') {
-            waitUntil {
-              def status = sh(
-                script: """
-                  aws codebuild batch-get-builds \
-                    --ids ${buildId} \
-                    --region ${AWS_REGION} \
-                    --query 'builds[0].buildStatus' \
-                    --output text
-                """,
-                returnStdout: true
-              ).trim()
+    /***********************
+     * TERRAFORM APPLY
+     ***********************/
+    stage('Terraform Apply') {
+      when {
+        expression { params.WHAT_TO_DEPLOY != 'destroy' }
+      }
+      steps {
+        dir('terraform') {
+          withCredentials([
+            string(credentialsId: 'groq-api-key', variable: 'GROQ_API_KEY'),
+            [$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']
+          ]) {
+            sh '''
+              aws sts get-caller-identity
 
-              echo "🔄 CodeBuild status: ${status}"
+              terraform init -input=false -upgrade=false
+              terraform apply -auto-approve \
+                -var="groq_api_key=$GROQ_API_KEY"
+            '''
+          }
+        }
+      }
+    }
 
-              if (status == 'SUCCEEDED') return true
-              if (status in ['FAILED','STOPPED','FAULT']) {
-                error "❌ CodeBuild failed: ${status}"
+    /***********************
+     * CODEBUILD – AI CHATBOT
+     ***********************/
+    stage('Build AI Chatbot (CodeBuild)') {
+      when {
+        expression {
+          params.WHAT_TO_DEPLOY == 'all' ||
+          params.WHAT_TO_DEPLOY == 'chatbot'
+        }
+      }
+      steps {
+        withCredentials([
+          [$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']
+        ]) {
+          script {
+            echo "🚀 Starting AWS CodeBuild..."
+
+            def buildId = sh(
+              script: """
+                aws codebuild start-build \
+                  --project-name ${CODEBUILD_PROJECT} \
+                  --region ${AWS_REGION} \
+                  --query 'build.id' \
+                  --output text
+              """,
+              returnStdout: true
+            ).trim()
+
+            echo "🧱 CodeBuild ID: ${buildId}"
+
+            timeout(time: 20, unit: 'MINUTES') {
+              waitUntil {
+                def status = sh(
+                  script: """
+                    aws codebuild batch-get-builds \
+                      --ids ${buildId} \
+                      --region ${AWS_REGION} \
+                      --query 'builds[0].buildStatus' \
+                      --output text
+                  """,
+                  returnStdout: true
+                ).trim()
+
+                echo "🔄 CodeBuild status: ${status}"
+
+                if (status == 'SUCCEEDED') return true
+                if (status in ['FAILED', 'STOPPED', 'FAULT']) {
+                  error "❌ CodeBuild failed with status: ${status}"
+                }
+
+                sleep 15
+                return false
               }
-              sleep 15
-              return false
             }
           }
         }
       }
     }
 
+    /***********************
+     * ECS DEPLOY
+     ***********************/
     stage('Deploy AI Chatbot to ECS') {
       when {
-        expression { params.WHAT_TO_DEPLOY == 'all' || params.WHAT_TO_DEPLOY == 'chatbot' }
+        expression {
+          params.WHAT_TO_DEPLOY == 'all' ||
+          params.WHAT_TO_DEPLOY == 'chatbot'
+        }
       }
       steps {
-        sh '''
-          echo "🚀 Deploying AI Chatbot to ECS"
-          aws ecs update-service \
-            --cluster ${ECS_CLUSTER} \
-            --service ${ECS_SERVICE} \
-            --force-new-deployment \
-            --region ${AWS_REGION}
-        '''
+        withCredentials([
+          [$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']
+        ]) {
+          sh '''
+            echo "🚀 Deploying AI Chatbot to ECS"
+
+            aws ecs update-service \
+              --cluster ${ECS_CLUSTER} \
+              --service ${ECS_SERVICE} \
+              --force-new-deployment \
+              --region ${AWS_REGION}
+          '''
+        }
       }
     }
 
+    /***********************
+     * ANSIBLE – RECIPE APP
+     ***********************/
     stage('Deploy Recipe App (Ansible)') {
       when {
-        expression { params.WHAT_TO_DEPLOY == 'all' || params.WHAT_TO_DEPLOY == 'recipe' }
+        expression {
+          params.WHAT_TO_DEPLOY == 'all' ||
+          params.WHAT_TO_DEPLOY == 'recipe'
+        }
       }
       steps {
         dir('ansible') {
           sh '''
+            echo "🚀 Deploying Recipe App using Ansible"
+
             ansible-playbook \
               -i inventory/hosts \
               playbooks/deploy-recipe-app.yml
@@ -143,12 +215,17 @@ stage('Terraform Apply') {
     }
   }
 
+  /***********************
+   * POST ACTIONS
+   ***********************/
   post {
     success {
-      echo "✅ PIPELINE SUCCESS – ${params.WHAT_TO_DEPLOY}"
+      echo "✅ PIPELINE SUCCESS → ${params.WHAT_TO_DEPLOY}"
     }
     failure {
-      echo "❌ PIPELINE FAILED – CHECK LOGS"
+      echo "❌ PIPELINE FAILED → ${params.WHAT_TO_DEPLOY}"
+      sh 'date'
+      sh 'pwd'
     }
   }
 }
