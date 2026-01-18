@@ -8,30 +8,18 @@ phases:
   pre_build:
     commands:
       - echo "=== PRE-BUILD PHASE ==="
-      - export REPO_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/ai-chatbot
-      - echo "ECR Repository URI: $REPO_URI"
-      - aws ecr get-login-password --region $AWS_REGION |
-        docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+      - echo "Logging in to Amazon ECR"
+      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
 
   build:
     commands:
       - echo "=== BUILD PHASE ==="
-      - |
-        if [ -f Dockerfile ]; then
-          echo "✅ Dockerfile found in root"
-          BUILD_DIR=.
-        elif [ -f app1-ai-chatbot/Dockerfile ]; then
-          echo "✅ Dockerfile found in app1-ai-chatbot"
-          cd app1-ai-chatbot || exit 1
-        else
-          echo "❌ Dockerfile not found"
-          exit 1
-        fi
+      - cd app1-ai-chatbot
       - docker build -t ai-chatbot:$IMAGE_TAG .
-      - docker tag ai-chatbot:$IMAGE_TAG $REPO_URI:$IMAGE_TAG
+      - docker tag ai-chatbot:$IMAGE_TAG $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/ai-chatbot:$IMAGE_TAG
 
   post_build:
     commands:
       - echo "=== POST-BUILD PHASE ==="
-      - docker push $REPO_URI:$IMAGE_TAG
-      - echo "✅ IMAGE PUSHED SUCCESSFULLY"
+      - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/ai-chatbot:$IMAGE_TAG
+      - echo "IMAGE PUSHED SUCCESSFULLY"
