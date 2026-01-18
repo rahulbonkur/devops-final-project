@@ -1,12 +1,3 @@
-resource "aws_ecs_cluster" "ai_chatbot" {
-  name = "ai-chatbot-cluster"
-}
-
-resource "aws_cloudwatch_log_group" "ai_chatbot" {
-  name              = "/ecs/ai-chatbot"
-  retention_in_days = 7
-}
-
 resource "aws_ecs_task_definition" "ai_chatbot" {
   family                   = "ai-chatbot-task"
   network_mode             = "awsvpc"
@@ -28,6 +19,18 @@ resource "aws_ecs_task_definition" "ai_chatbot" {
         }
       ]
 
+      # ✅ ADD THIS BLOCK
+      environment = [
+        {
+          name  = "GROQ_API_KEY"
+          value = "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"
+        },
+        {
+          name  = "GROQ_MODEL"
+          value = "llama3-70b-8192"
+        }
+      ]
+
       healthCheck = {
         command     = ["CMD-SHELL", "curl -f http://localhost:5000/health || exit 1"]
         interval    = 30
@@ -46,29 +49,4 @@ resource "aws_ecs_task_definition" "ai_chatbot" {
       }
     }
   ])
-}
-
-resource "aws_ecs_service" "ai_chatbot" {
-  name            = "ai-chatbot-service"
-  cluster         = aws_ecs_cluster.ai_chatbot.id
-  task_definition = aws_ecs_task_definition.ai_chatbot.arn
-  desired_count   = 1
-  launch_type     = "FARGATE"
-
-  network_configuration {
-    subnets          = aws_subnet.public[*].id
-    security_groups  = [aws_security_group.ecs.id]
-    assign_public_ip = true
-  }
-
-  load_balancer {
-    target_group_arn = aws_lb_target_group.ai_chatbot.arn
-    container_name   = "ai-chatbot"
-    container_port   = 5000
-  }
-
-  depends_on = [
-    aws_lb_listener.ai_chatbot,
-    aws_cloudwatch_log_group.ai_chatbot
-  ]
 }
