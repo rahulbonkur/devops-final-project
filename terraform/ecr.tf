@@ -1,17 +1,15 @@
 resource "aws_ecr_repository" "ai_chatbot" {
-  name         = "ai-chatbot"
-  force_delete = true   # 🔥 THIS IS THE FIX
+  name                 = "ai-chatbot"
+  image_tag_mutability = "MUTABLE"
 
   image_scanning_configuration {
     scan_on_push = true
   }
 
-  encryption_configuration {
-    encryption_type = "AES256"
-  }
+  force_delete = true  # 🔥 THIS IS THE KEY FIX
 
   tags = {
-    Environment = "dev"
+    Environment = var.environment
     Project     = "DevOps Final Project"
     ManagedBy   = "Terraform"
   }
