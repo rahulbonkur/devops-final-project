@@ -29,6 +29,7 @@ pipeline {
     CODEBUILD_PROJECT = 'ai-chatbot'
     ECS_CLUSTER       = 'ai-chatbot-cluster'
     ECS_SERVICE       = 'ai-chatbot-service'
+    TF_INPUT          = "false"   // 🚀 disables ALL terraform prompts
   }
 
   stages {
@@ -40,18 +41,6 @@ pipeline {
       steps {
         checkout scm
         echo "✅ Code checked out successfully"
-      }
-    }
-
-    /***********************
-     * CONFIRM DESTROY
-     ***********************/
-    stage('Confirm Destroy') {
-      when {
-        expression { params.WHAT_TO_DEPLOY == 'destroy' }
-      }
-      steps {
-        input message: '⚠️ CONFIRMATION REQUIRED: Destroy ALL infrastructure?'
       }
     }
 
@@ -215,17 +204,12 @@ pipeline {
     }
   }
 
-  /***********************
-   * POST ACTIONS
-   ***********************/
   post {
     success {
       echo "✅ PIPELINE SUCCESS → ${params.WHAT_TO_DEPLOY}"
     }
     failure {
       echo "❌ PIPELINE FAILED → ${params.WHAT_TO_DEPLOY}"
-      sh 'date'
-      sh 'pwd'
     }
   }
 }
