@@ -89,7 +89,7 @@ resource "aws_ecs_cluster" "ai_chatbot" {
   }
 }
 
-# ECS Service - USING PUBLIC SUBNETS
+# ECS Service
 resource "aws_ecs_service" "ai_chatbot" {
   name            = "ai-chatbot-service"
   cluster         = aws_ecs_cluster.ai_chatbot.id
@@ -128,4 +128,6 @@ resource "aws_ecs_service" "ai_chatbot" {
     Name        = "ai-chatbot-service"
     Environment = "dev"
     ManagedBy   = "Terraform"
-    Project     = "DevOps Fina
+    Project     = "DevOps Final Project"
+  }
+}
