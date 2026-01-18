@@ -3,12 +3,12 @@ resource "aws_cloudwatch_log_group" "ai_chatbot" {
   name              = "/ecs/ai-chatbot"
   retention_in_days = 7
 
-  tags = merge(
-    local.common_tags,
-    {
-      Name = "ai-chatbot-logs"
-    }
-  )
+  tags = {
+    Name        = "ai-chatbot-logs"
+    Environment = "dev"
+    ManagedBy   = "Terraform"
+    Project     = "DevOps Final Project"
+  }
 }
 
 # ECS Task Definition
@@ -64,12 +64,12 @@ resource "aws_ecs_task_definition" "ai_chatbot" {
     }
   ])
 
-  tags = merge(
-    local.common_tags,
-    {
-      Name = "ai-chatbot-task"
-    }
-  )
+  tags = {
+    Name        = "ai-chatbot-task"
+    Environment = "dev"
+    ManagedBy   = "Terraform"
+    Project     = "DevOps Final Project"
+  }
 }
 
 # ECS Cluster
@@ -81,12 +81,12 @@ resource "aws_ecs_cluster" "ai_chatbot" {
     value = "enabled"
   }
   
-  tags = merge(
-    local.common_tags,
-    {
-      Name = "ai-chatbot-cluster"
-    }
-  )
+  tags = {
+    Name        = "ai-chatbot-cluster"
+    Environment = "dev"
+    ManagedBy   = "Terraform"
+    Project     = "DevOps Final Project"
+  }
 }
 
 # ECS Service - USING PUBLIC SUBNETS
@@ -108,9 +108,9 @@ resource "aws_ecs_service" "ai_chatbot" {
   }
   
   network_configuration {
-    subnets          = aws_subnet.public[*].id  # ← CHANGED TO PUBLIC SUBNETS
+    subnets          = aws_subnet.public[*].id
     security_groups  = [aws_security_group.ecs.id]
-    assign_public_ip = true  # Tasks get public IPs in public subnets
+    assign_public_ip = true
   }
   
   load_balancer {
@@ -124,10 +124,8 @@ resource "aws_ecs_service" "ai_chatbot" {
     aws_cloudwatch_log_group.ai_chatbot
   ]
   
-  tags = merge(
-    local.common_tags,
-    {
-      Name = "ai-chatbot-service"
-    }
-  )
-}
+  tags = {
+    Name        = "ai-chatbot-service"
+    Environment = "dev"
+    ManagedBy   = "Terraform"
+    Project     = "DevOps Fina
