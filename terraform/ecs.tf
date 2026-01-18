@@ -59,6 +59,10 @@ resource "aws_ecs_service" "ai_chatbot" {
     container_name   = "ai-chatbot"
     container_port   = 5000
   }
+resource "aws_cloudwatch_log_group" "ai_chatbot" {
+  name              = "/ecs/ai-chatbot"
+  retention_in_days = 7
+}
 
   depends_on = [aws_lb_listener.ai_chatbot]
 }
