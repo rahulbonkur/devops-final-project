@@ -1,18 +1,12 @@
 pipeline {
   agent any
 
-  /***********************
-   * PIPELINE SAFETY
-   ***********************/
   options {
     timeout(time: 45, unit: 'MINUTES')
     disableConcurrentBuilds()
     timestamps()
   }
 
-  /***********************
-   * PARAMETERS
-   ***********************/
   parameters {
     choice(
       name: 'WHAT_TO_DEPLOY',
@@ -21,22 +15,16 @@ pipeline {
     )
   }
 
-  /***********************
-   * ENV VARIABLES
-   ***********************/
   environment {
     AWS_REGION        = 'ap-south-1'
     CODEBUILD_PROJECT = 'ai-chatbot'
     ECS_CLUSTER       = 'ai-chatbot-cluster'
     ECS_SERVICE       = 'ai-chatbot-service'
-    TF_INPUT          = "false"   // 🚀 disables ALL terraform prompts
+    TF_INPUT          = "false"
   }
 
   stages {
 
-    /***********************
-     * CHECKOUT
-     ***********************/
     stage('Checkout') {
       steps {
         checkout scm
@@ -44,9 +32,6 @@ pipeline {
       }
     }
 
-    /***********************
-     * TERRAFORM DESTROY
-     ***********************/
     stage('Terraform Destroy') {
       when {
         expression { params.WHAT_TO_DEPLOY == 'destroy' }
@@ -54,7 +39,7 @@ pipeline {
       steps {
         dir('terraform') {
           withCredentials([
-            string(credentialsId: 'groq-api-key', variable: 'GROQ_API_KEY'),
+            string(credentialsId: 'groq-api-key', variable: 'GROQ_API_KEY')
           ]) {
             sh '''
               aws sts get-caller-identity
@@ -68,9 +53,6 @@ pipeline {
       }
     }
 
-    /***********************
-     * TERRAFORM APPLY
-     ***********************/
     stage('Terraform Apply') {
       when {
         expression { params.WHAT_TO_DEPLOY != 'destroy' }
@@ -78,8 +60,7 @@ pipeline {
       steps {
         dir('terraform') {
           withCredentials([
-            string(credentialsId: 'groq-api-key', variable: 'GROQ_API_KEY'),
-            [$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']
+            string(credentialsId: 'groq-api-key', variable: 'GROQ_API_KEY')
           ]) {
             sh '''
               aws sts get-caller-identity
@@ -93,9 +74,6 @@ pipeline {
       }
     }
 
-    /***********************
-     * CODEBUILD – AI CHATBOT
-     ***********************/
     stage('Build AI Chatbot (CodeBuild)') {
       when {
         expression {
@@ -104,57 +82,50 @@ pipeline {
         }
       }
       steps {
-        withCredentials([
-          [$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']
-        ]) {
-          script {
-            echo "🚀 Starting AWS CodeBuild..."
+        script {
+          echo "🚀 Starting AWS CodeBuild..."
 
-            def buildId = sh(
-              script: """
-                aws codebuild start-build \
-                  --project-name ${CODEBUILD_PROJECT} \
-                  --region ${AWS_REGION} \
-                  --query 'build.id' \
-                  --output text
-              """,
-              returnStdout: true
-            ).trim()
+          def buildId = sh(
+            script: """
+              aws codebuild start-build \
+                --project-name ${CODEBUILD_PROJECT} \
+                --region ${AWS_REGION} \
+                --query 'build.id' \
+                --output text
+            """,
+            returnStdout: true
+          ).trim()
 
-            echo "🧱 CodeBuild ID: ${buildId}"
+          echo "🧱 CodeBuild ID: ${buildId}"
 
-            timeout(time: 20, unit: 'MINUTES') {
-              waitUntil {
-                def status = sh(
-                  script: """
-                    aws codebuild batch-get-builds \
-                      --ids ${buildId} \
-                      --region ${AWS_REGION} \
-                      --query 'builds[0].buildStatus' \
-                      --output text
-                  """,
-                  returnStdout: true
-                ).trim()
+          timeout(time: 20, unit: 'MINUTES') {
+            waitUntil {
+              def status = sh(
+                script: """
+                  aws codebuild batch-get-builds \
+                    --ids ${buildId} \
+                    --region ${AWS_REGION} \
+                    --query 'builds[0].buildStatus' \
+                    --output text
+                """,
+                returnStdout: true
+              ).trim()
 
-                echo "🔄 CodeBuild status: ${status}"
+              echo "🔄 CodeBuild status: ${status}"
 
-                if (status == 'SUCCEEDED') return true
-                if (status in ['FAILED', 'STOPPED', 'FAULT']) {
-                  error "❌ CodeBuild failed with status: ${status}"
-                }
-
-                sleep 15
-                return false
+              if (status == 'SUCCEEDED') return true
+              if (status in ['FAILED', 'STOPPED', 'FAULT']) {
+                error "❌ CodeBuild failed: ${status}"
               }
+
+              sleep 15
+              return false
             }
           }
         }
       }
     }
 
-    /***********************
-     * ECS DEPLOY
-     ***********************/
     stage('Deploy AI Chatbot to ECS') {
       when {
         expression {
@@ -163,25 +134,18 @@ pipeline {
         }
       }
       steps {
-        withCredentials([
-          [$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']
-        ]) {
-          sh '''
-            echo "🚀 Deploying AI Chatbot to ECS"
+        sh '''
+          echo "🚀 Deploying AI Chatbot to ECS"
 
-            aws ecs update-service \
-              --cluster ${ECS_CLUSTER} \
-              --service ${ECS_SERVICE} \
-              --force-new-deployment \
-              --region ${AWS_REGION}
-          '''
-        }
+          aws ecs update-service \
+            --cluster ${ECS_CLUSTER} \
+            --service ${ECS_SERVICE} \
+            --force-new-deployment \
+            --region ${AWS_REGION}
+        '''
       }
     }
 
-    /***********************
-     * ANSIBLE – RECIPE APP
-     ***********************/
     stage('Deploy Recipe App (Ansible)') {
       when {
         expression {
