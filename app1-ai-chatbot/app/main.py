@@ -21,6 +21,11 @@ def create_app():
     with app.app_context():
         db.create_all()
 
+    # ✅ HEALTH CHECK ROUTE (ADD THIS)
+    @app.route("/health")
+    def health():
+        return "OK", 200
+
     app.register_blueprint(main_routes)
     return app
 
