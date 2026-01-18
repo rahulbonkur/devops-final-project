@@ -19,15 +19,14 @@ resource "aws_ecs_task_definition" "ai_chatbot" {
         }
       ]
 
-      # ✅ ADD THIS BLOCK
       environment = [
         {
           name  = "GROQ_API_KEY"
-          value = "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"
+          value = var.groq_api_key
         },
         {
           name  = "GROQ_MODEL"
-          value = "llama3-70b-8192"
+          value = var.groq_model
         }
       ]
 
