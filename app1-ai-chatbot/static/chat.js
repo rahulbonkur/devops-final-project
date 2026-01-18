@@ -4,26 +4,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const sendBtn = document.getElementById("send-btn");
     const newChatBtn = document.getElementById("new-chat-btn");
 
-    let sessionId = localStorage.getItem("chat_session_id");
+    // Initial bot message
+    appendMessage("assistant", "Hello! How can I help you today?");
 
-    async function startNewSession() {
-        const response = await fetch("/api/session/new", { method: "POST" });
-        const data = await response.json();
-        sessionId = data.session_id;
-        localStorage.setItem("chat_session_id", sessionId);
+    newChatBtn.addEventListener("click", () => {
         chatBox.innerHTML = "";
         appendMessage("assistant", "Hello! How can I help you today?");
-    }
-
-    if (!sessionId) {
-        startNewSession();
-    }
-
-    newChatBtn.addEventListener("click", startNewSession);
+    });
 
     function appendMessage(role, text) {
         const msgDiv = document.createElement("div");
-        msgDiv.classList.add("message", role === "user" ? "user-message" : "bot-message");
+        msgDiv.classList.add("message");
+        msgDiv.classList.add(role === "user" ? "user-message" : "bot-message");
         msgDiv.innerText = text;
         chatBox.appendChild(msgDiv);
         chatBox.scrollTop = chatBox.scrollHeight;
@@ -37,25 +29,45 @@ document.addEventListener("DOMContentLoaded", () => {
         userInput.value = "";
 
         try {
-            const response = await fetch("/api/chat", {
+            const response = await fetch("/chat", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ session_id: sessionId, message: message })
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ message: message })
             });
 
+            // Handle ALB / backend failures
+            if (!response.ok) {
+                appendMessage(
+                    "assistant",
+                    `Server error (${response.status}). Please try again.`
+                );
+                return;
+            }
+
             const data = await response.json();
+
             if (data.response) {
                 appendMessage("assistant", data.response);
             } else {
-                appendMessage("assistant", "Error: Could not get response.");
+                appendMessage("assistant", "Sorry, I couldn't understand that.");
             }
+
         } catch (error) {
-            appendMessage("assistant", "Error: Network issue.");
+            console.error("Chat error:", error);
+            appendMessage(
+                "assistant",
+                "Network issue. Please check your connection and try again."
+            );
         }
     }
 
     sendBtn.addEventListener("click", sendMessage);
+
     userInput.addEventListener("keypress", (e) => {
-        if (e.key === "Enter") sendMessage();
+        if (e.key === "Enter") {
+            sendMessage();
+        }
     });
 });
