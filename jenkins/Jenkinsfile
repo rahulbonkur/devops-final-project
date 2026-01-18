@@ -10,17 +10,14 @@ pipeline {
   }
 
   environment {
-    AWS_REGION      = 'ap-south-1'
+    AWS_REGION        = 'ap-south-1'
     CODEBUILD_PROJECT = 'ai-chatbot'
-    ECS_CLUSTER     = 'ai-chatbot-cluster'
-    ECS_SERVICE     = 'ai-chatbot-service'
+    ECS_CLUSTER       = 'ai-chatbot-cluster'
+    ECS_SERVICE       = 'ai-chatbot-service'
   }
 
   stages {
 
-    /* =======================
-       CHECKOUT
-    ======================= */
     stage('Checkout') {
       steps {
         checkout scm
@@ -28,9 +25,6 @@ pipeline {
       }
     }
 
-    /* =======================
-       TERRAFORM DESTROY
-    ======================= */
     stage('Terraform Destroy') {
       when {
         expression { params.WHAT_TO_DEPLOY == 'destroy' }
@@ -45,9 +39,6 @@ pipeline {
       }
     }
 
-    /* =======================
-       TERRAFORM APPLY
-    ======================= */
     stage('Terraform Apply') {
       when {
         expression { params.WHAT_TO_DEPLOY != 'destroy' }
@@ -62,89 +53,61 @@ pipeline {
       }
     }
 
-    /* =======================
-       BUILD CHATBOT IMAGE
-    ======================= */
-stage('Build AI Chatbot (CodeBuild)') {
-  when {
-    expression { params.WHAT_TO_DEPLOY == 'all' || params.WHAT_TO_DEPLOY == 'chatbot' }
-  }
-  steps {
-    script {
-      echo "🚀 Starting CodeBuild for AI Chatbot..."
+    stage('Build AI Chatbot (CodeBuild)') {
+      when {
+        expression { params.WHAT_TO_DEPLOY == 'all' || params.WHAT_TO_DEPLOY == 'chatbot' }
+      }
+      steps {
+        script {
+          echo "🚀 Starting CodeBuild..."
 
-      def buildId = sh(
-        script: """
-          aws codebuild start-build \
-            --project-name ${CODEBUILD_PROJECT} \
-            --region ${AWS_REGION} \
-            --query 'build.id' \
-            --output text
-        """,
-        returnStdout: true
-      ).trim()
+          def buildId = sh(
+            script: """
+              aws codebuild start-build \
+                --project-name ${CODEBUILD_PROJECT} \
+                --region ${AWS_REGION} \
+                --query 'build.id' \
+                --output text
+            """,
+            returnStdout: true
+          ).trim()
 
-      echo "🧱 CodeBuild ID: ${buildId}"
-      echo "⏳ Waiting for CodeBuild to finish..."
+          echo "🧱 CodeBuild ID: ${buildId}"
 
-      sh """
-        aws codebuild batch-get-builds \
-          --ids ${buildId} \
-          --region ${AWS_REGION}
-      """
+          timeout(time: 20, unit: 'MINUTES') {
+            waitUntil {
+              def status = sh(
+                script: """
+                  aws codebuild batch-get-builds \
+                    --ids ${buildId} \
+                    --region ${AWS_REGION} \
+                    --query 'builds[0].buildStatus' \
+                    --output text
+                """,
+                returnStdout: true
+              ).trim()
 
-      sh """
-        while true; do
-          STATUS=\$(aws codebuild batch-get-builds \
-            --ids ${buildId} \
-            --region ${AWS_REGION} \
-            --query 'builds[0].buildStatus' \
-            --output text)
+              echo "🔄 CodeBuild status: ${status}"
 
-          echo "🔄 CodeBuild status: \$STATUS"
-
-          if [ "\$STATUS" = "SUCCEEDED" ]; then
-            echo "✅ CodeBuild succeeded"
-            break
-          elif [ "\$STATUS" = "FAILED" ] || [ "\$STATUS" = "STOPPED" ]; then
-            echo "❌ CodeBuild failed"
-            exit 1
-          fi
-
-          sleep 15
-        done
-      """
+              if (status == 'SUCCEEDED') return true
+              if (status in ['FAILED','STOPPED','FAULT']) {
+                error "❌ CodeBuild failed: ${status}"
+              }
+              sleep 15
+              return false
+            }
+          }
+        }
+      }
     }
-  }
-}
 
-stage('Deploy AI Chatbot to ECS') {
-  when {
-    expression { params.WHAT_TO_DEPLOY == 'all' || params.WHAT_TO_DEPLOY == 'chatbot' }
-  }
-  steps {
-    echo "🚀 Deploying AI Chatbot to ECS..."
-
-    sh """
-      aws ecs update-service \
-        --cluster ${ECS_CLUSTER} \
-        --service ${ECS_SERVICE} \
-        --force-new-deployment \
-        --region ${AWS_REGION}
-    """
-  }
-}
-
-    /* =======================
-       DEPLOY CHATBOT TO ECS
-    ======================= */
     stage('Deploy AI Chatbot to ECS') {
       when {
         expression { params.WHAT_TO_DEPLOY == 'all' || params.WHAT_TO_DEPLOY == 'chatbot' }
       }
       steps {
         sh '''
-          echo "♻️ Forcing ECS redeployment"
+          echo "🚀 Deploying AI Chatbot to ECS"
           aws ecs update-service \
             --cluster ${ECS_CLUSTER} \
             --service ${ECS_SERVICE} \
@@ -154,9 +117,6 @@ stage('Deploy AI Chatbot to ECS') {
       }
     }
 
-    /* =======================
-       DEPLOY RECIPE APP
-    ======================= */
     stage('Deploy Recipe App (Ansible)') {
       when {
         expression { params.WHAT_TO_DEPLOY == 'all' || params.WHAT_TO_DEPLOY == 'recipe' }
