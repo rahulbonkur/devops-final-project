@@ -25,3 +25,15 @@ variable "slave_instance_type" {
 variable "mykey" {
   description = "EC2 Key pair name"
 }
+
+variable "groq_api_key" {
+  description = "Groq API Key for AI Chatbot"
+  type        = string
+  sensitive   = true
+}
+
+variable "groq_model" {
+  description = "Groq Model"
+  type        = string
+  default     = "llama3-70b-8192"
+}
