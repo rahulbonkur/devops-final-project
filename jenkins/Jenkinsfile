@@ -55,7 +55,6 @@ pipeline {
         dir('terraform') {
           withCredentials([
             string(credentialsId: 'groq-api-key', variable: 'GROQ_API_KEY'),
-            [$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']
           ]) {
             sh '''
               aws sts get-caller-identity
