@@ -19,14 +19,19 @@ resource "aws_lb_target_group" "ai_chatbot" {
 
   health_check {
     path                = "/health"
+    port                = "traffic-port"
+    protocol            = "HTTP"
+    matcher             = "200"
+    interval            = 30
+    timeout             = 5
     healthy_threshold   = 2
-    unhealthy_threshold = 10
+    unhealthy_threshold = 3
   }
 }
 
 resource "aws_lb_listener" "ai_chatbot" {
   load_balancer_arn = aws_lb.ai_chatbot.arn
-  port              = "80"
+  port              = 80
   protocol          = "HTTP"
 
   default_action {
