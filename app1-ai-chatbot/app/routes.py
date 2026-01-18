@@ -1,45 +1,100 @@
-from flask import Blueprint, request, jsonify, render_template
-from datetime import datetime
-import uuid
-from app.models import db, ChatSession, Message
-from app.ai_service import call_ai
+document.addEventListener("DOMContentLoaded", () => {
+    const chatBox = document.getElementById("chat-box");
+    const userInput = document.getElementById("user-input");
+    const sendBtn = document.getElementById("send-btn");
+    const newChatBtn = document.getElementById("new-chat-btn");
 
-main_routes = Blueprint("main_routes", __name__)
+    let sessionId = localStorage.getItem("chat_session_id");
 
-@main_routes.route("/")
-def index():
-    return render_template("chat.html")
+    // -------- UI Helpers --------
+    function appendMessage(role, text) {
+        const msgDiv = document.createElement("div");
+        msgDiv.classList.add("message");
+        msgDiv.classList.add(role === "user" ? "user-message" : "bot-message");
+        msgDiv.innerText = text;
+        chatBox.appendChild(msgDiv);
+        chatBox.scrollTop = chatBox.scrollHeight;
+    }
 
-@main_routes.route("/api/session/new", methods=["POST"])
-def new_session():
-    session_id = str(uuid.uuid4())
-    db.session.add(ChatSession(id=session_id))
-    db.session.commit()
-    return jsonify({"session_id": session_id})
+    // -------- Create Session --------
+    async function startNewSession() {
+        try {
+            const response = await fetch("/api/session/new", {
+                method: "POST"
+            });
 
-@main_routes.route("/api/chat", methods=["POST"])
-def chat():
-    data = request.json
-    session_id = data.get("session_id")
-    message = data.get("message")
+            if (!response.ok) {
+                appendMessage("assistant", "Failed to start session.");
+                return;
+            }
 
-    if not session_id or not message:
-        return jsonify({"error": "Invalid request"}), 400
+            const data = await response.json();
+            sessionId = data.session_id;
+            localStorage.setItem("chat_session_id", sessionId);
 
-    db.session.add(Message(session_id=session_id, role="user", content=message))
-    db.session.commit()
+            chatBox.innerHTML = "";
+            appendMessage("assistant", "Hello! How can I help you today?");
+        } catch (error) {
+            console.error("Session error:", error);
+            appendMessage("assistant", "Network issue while creating session.");
+        }
+    }
 
-    history = Message.query.filter_by(session_id=session_id)\
-        .order_by(Message.timestamp).all()
+    if (!sessionId) {
+        startNewSession();
+    } else {
+        appendMessage("assistant", "Hello! How can I help you today?");
+    }
 
-    messages = [{"role": m.role, "content": m.content} for m in history]
-    reply = call_ai(messages)
+    newChatBtn.addEventListener("click", startNewSession);
 
-    db.session.add(Message(session_id=session_id, role="assistant", content=reply))
-    db.session.commit()
+    // -------- Send Message --------
+    async function sendMessage() {
+        const message = userInput.value.trim();
+        if (!message) return;
 
-    return jsonify({"response": reply})
+        appendMessage("user", message);
+        userInput.value = "";
 
-@main_routes.route("/health")
-def health():
-    return jsonify({"status": "healthy", "time": datetime.utcnow().isoformat()})
+        try {
+            const response = await fetch("/api/chat", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    session_id: sessionId,
+                    message: message
+                })
+            });
+
+            if (!response.ok) {
+                appendMessage(
+                    "assistant",
+                    `Server error (${response.status}). Try again.`
+                );
+                return;
+            }
+
+            const data = await response.json();
+
+            if (data.response) {
+                appendMessage("assistant", data.response);
+            } else {
+                appendMessage("assistant", "No response from AI.");
+            }
+
+        } catch (error) {
+            console.error("Chat error:", error);
+            appendMessage("assistant", "Error: Network issue.");
+        }
+    }
+
+    sendBtn.addEventListener("click", sendMessage);
+
+    userInput.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") {
+            sendMessage();
+        }
+    });
+});
