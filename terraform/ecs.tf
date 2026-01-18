@@ -97,16 +97,6 @@ resource "aws_ecs_service" "ai_chatbot" {
   desired_count   = 1
   launch_type     = "FARGATE"
   
-  deployment_configuration {
-    maximum_percent         = 200
-    minimum_healthy_percent = 100
-    
-    deployment_circuit_breaker {
-      enable   = true
-      rollback = true
-    }
-  }
-  
   network_configuration {
     subnets          = aws_subnet.public[*].id
     security_groups  = [aws_security_group.ecs.id]
