@@ -25,19 +25,24 @@ pipeline {
       }
     }
 
-    stage('Terraform Destroy') {
-      when {
-        expression { params.WHAT_TO_DEPLOY == 'destroy' }
-      }
-      steps {
-        dir('terraform') {
-          sh '''
-            terraform init -input=false
-            terraform destroy -auto-approve
-          '''
-        }
+stage('Terraform Destroy') {
+  when {
+    expression { params.WHAT_TO_DEPLOY == 'destroy' }
+  }
+  steps {
+    dir('terraform') {
+      withCredentials([
+        string(credentialsId: 'groq-api-key', variable: 'GROQ_API_KEY')
+      ]) {
+        sh '''
+          terraform init -input=false
+          terraform destroy -auto-approve \
+            -var="groq_api_key=$GROQ_API_KEY"
+        '''
       }
     }
+  }
+}
 
 stage('Terraform Apply') {
   when {
