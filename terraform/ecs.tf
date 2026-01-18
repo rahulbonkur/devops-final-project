@@ -2,6 +2,11 @@ resource "aws_ecs_cluster" "ai_chatbot" {
   name = "ai-chatbot-cluster"
 }
 
+resource "aws_cloudwatch_log_group" "ai_chatbot" {
+  name              = "/ecs/ai-chatbot"
+  retention_in_days = 7
+}
+
 resource "aws_ecs_task_definition" "ai_chatbot" {
   family                   = "ai-chatbot-task"
   network_mode             = "awsvpc"
@@ -16,10 +21,12 @@ resource "aws_ecs_task_definition" "ai_chatbot" {
       image     = "${aws_ecr_repository.ai_chatbot.repository_url}:latest"
       essential = true
 
-      portMappings = [{
-        containerPort = 5000
-        hostPort      = 5000
-      }]
+      portMappings = [
+        {
+          containerPort = 5000
+          hostPort      = 5000
+        }
+      ]
 
       healthCheck = {
         command     = ["CMD-SHELL", "curl -f http://localhost:5000/health || exit 1"]
@@ -59,10 +66,9 @@ resource "aws_ecs_service" "ai_chatbot" {
     container_name   = "ai-chatbot"
     container_port   = 5000
   }
-resource "aws_cloudwatch_log_group" "ai_chatbot" {
-  name              = "/ecs/ai-chatbot"
-  retention_in_days = 7
-}
 
-  depends_on = [aws_lb_listener.ai_chatbot]
+  depends_on = [
+    aws_lb_listener.ai_chatbot,
+    aws_cloudwatch_log_group.ai_chatbot
+  ]
 }
