@@ -39,19 +39,24 @@ pipeline {
       }
     }
 
-    stage('Terraform Apply') {
-      when {
-        expression { params.WHAT_TO_DEPLOY != 'destroy' }
-      }
-      steps {
-        dir('terraform') {
-          sh '''
-            terraform init -input=false
-            terraform apply -auto-approve
-          '''
-        }
+stage('Terraform Apply') {
+  when {
+    expression { params.WHAT_TO_DEPLOY != 'destroy' }
+  }
+  steps {
+    dir('terraform') {
+      withCredentials([
+        string(credentialsId: 'groq-api-key', variable: 'GROQ_API_KEY')
+      ]) {
+        sh '''
+          terraform init -input=false
+          terraform apply -auto-approve \
+            -var="groq_api_key=$GROQ_API_KEY"
+        '''
       }
     }
+  }
+}
 
     stage('Build AI Chatbot (CodeBuild)') {
       when {
