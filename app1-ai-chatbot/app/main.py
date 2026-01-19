@@ -11,14 +11,13 @@ def create_app():
     )
 
     app.config["SECRET_KEY"] = "dev-secret-key"
-    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///chatbot.db"
+
+    # ✅ ONLY in-memory DB for ECS
+    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
     CORS(app)
     db.init_app(app)
-
-    with app.app_context():
-        db.create_all()
 
     @app.route("/health")
     def health():
@@ -27,9 +26,8 @@ def create_app():
     app.register_blueprint(main_routes)
     return app
 
-# 🔥 THIS IS WHAT GUNICORN USES
+# 🔥 Gunicorn entrypoint
 app = create_app()
 
-# 🔹 Only for local testing (not used in ECS)
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
